@@ -13,6 +13,10 @@
         <module>ch01-reflection</module>
         <module>ch02-lambda</module>
         <module>ch03-math</module>
+        <module>ch04-string</module>
+        <module>ch05-time</module>
+        <module>ch06-system</module>
+        <module>ch07-other</module>
     </modules>
 
     <properties>
