@@ -12,6 +12,8 @@ import java.util.function.Function;
 
 /**
  * method reference对象序列化时,会包含metadata信息
+ *
+ * method reference对象没有父类(???jre做了屏蔽???)
  */
 public class LambdaSerializeTest {
 
