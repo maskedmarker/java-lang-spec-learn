@@ -26,6 +26,13 @@ public class LambdaSerializeTest {
         StringProcessor processor = new StringProcessor();
         Function<String, String> function = processor::process;
         System.out.println("function.getClass() = " + function.getClass());
+
+        // 没有父类
+        Class<?> parent = function.getClass().getSuperclass();
+        while (parent != Object.class) {
+            System.out.println("parent = " + parent);
+            parent = parent.getSuperclass();
+        }
     }
 
     /**
@@ -44,6 +51,12 @@ public class LambdaSerializeTest {
         StringProcessor2 processor = new StringProcessor2();
         SFunction<String, String> function = processor::process;
         System.out.println("function.getClass() = " + function.getClass());
+        // 没有父类
+        Class<?> parent = function.getClass().getSuperclass();
+        while (parent != Object.class) {
+            System.out.println("parent = " + parent);
+            parent = parent.getSuperclass();
+        }
 
         SerializedLambda serializedLambda = SerializedLambdaUtils.resolve(function);
         System.out.println("serializedLambda = " + serializedLambda);
@@ -69,6 +82,12 @@ public class LambdaSerializeTest {
         StringProcessor3 processor = new StringProcessor3();
         SFunction<String, List<String>> function = processor::process;
         System.out.println("function.getClass() = " + function.getClass());
+        // 没有父类
+        Class<?> parent = function.getClass().getSuperclass();
+        while (parent != Object.class) {
+            System.out.println("parent = " + parent);
+            parent = parent.getSuperclass();
+        }
 
         SerializedLambda serializedLambda = SerializedLambdaUtils.resolve(function);
         System.out.println("serializedLambda = " + serializedLambda);
