@@ -1,4 +1,4 @@
-# java lambda
+# java method reference
 
 ## ::运算符
 In Java 8, the double colon (::) operator is called method references
