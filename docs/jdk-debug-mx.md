@@ -50,7 +50,7 @@ JMC 使用的是 JMX + Attach API,所以如果用 -XX:+DisableAttachMechanism �
 
 C:\Users\Administrator\AppData\Local\Temp\hsperfdata_Administrator 目录下的文件是 HotSpot 性能数据文件(HotSpot Performance Data)
 由 JVM 启动时自动创建,JVM 进程退出时会自动删除它对应的文件.
-该文件为共享内存映射文件,读取时必须确保目标 JVM 仍在运行.
+因为是记录jvm的性能指标,为了性能该文件为共享内存映射文件,读取时必须确保目标 JVM 仍在运行.
 
 ```text
 C:\Users\Administrator\AppData\Local\Temp\hsperfdata_Administrator 目录下的文件是 HotSpot 性能数据文件（HotSpot Performance Data）,
