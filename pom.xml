@@ -18,6 +18,7 @@
         <module>ch06-system</module>
         <module>ch07-other</module>
         <module>ch08-opcode</module>
+        <module>ch50-jdk-tool</module>
     </modules>
 
     <properties>
