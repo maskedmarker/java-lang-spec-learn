@@ -1,12 +1,13 @@
 # juc-AQS
 
-AQS(AbstractQueuedSynchronizer)由volatile state和双向的FIFO链表构成.
-ConditionObject由单向链表构成.
+AQS(AbstractQueuedSynchronizer)由volatile state和双向的FIFO链表构成;ConditionObject由单向链表构成.
+前者可以称为同步队列(sync queue),后者可以称为条件队列(condition queue).
+
 
 ## Node
 
 1. Node需要支持独占模式和共享模式(即排他锁场景和共享锁场景)
-2. Node不仅用于AQS的FIFOO链表,还被用于ConditionObject的单向链表.
+2. Node不仅用于AQS的FIFO链表,还被用于ConditionObject的单向链表.
 
 ### Node.waitStatus
 
@@ -92,3 +93,30 @@ await() --> Node(CONDITION) --> 被 signal()
                            移入同步队列并变为 SIGNAL                            
 ```
 
+
+
+## Condition
+
+```text
+java.util.concurrent.locks.AbstractQueuedSynchronizer.ConditionObject.await()
+
+public final void await() throws InterruptedException {
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    Node node = addConditionWaiter();
+    int savedState = fullyRelease(node);
+    int interruptMode = 0;
+    while (!isOnSyncQueue(node)) {
+        // 将当前线程挂起,除非由其他线程将当前线程的node重新放入到AQS的acquire队列中
+        LockSupport.park(this);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+    }
+    if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+        interruptMode = REINTERRUPT;
+    if (node.nextWaiter != null) // clean up if cancelled
+        unlinkCancelledWaiters();
+    if (interruptMode != 0)
+        reportInterruptAfterWait(interruptMode);
+}
+```

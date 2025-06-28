@@ -14,25 +14,25 @@ public class ReentrantLockTest {
         Condition condition = lock.newCondition();
 
         Thread t1 = new Thread(() -> {
-            lock.lock();
+            lock.lock(); // 锁的status+1
             try {
                 System.out.println("Thread1 waiting");
-                condition.await();  // 当前线程进入等待队列，并释放锁
+                condition.await();  // 当前线程进入条件队列，锁的status-1,然后唤醒同步队列的头节点的线程,挂起当前线程
                 System.out.println("Thread1 resumed");
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } finally {
-                lock.unlock();
+                lock.unlock(); // 锁的status-1,然后唤醒同步队列的头节点的线程
             }
         });
 
         Thread t2 = new Thread(() -> {
-            lock.lock();
+            lock.lock(); // 锁的status+1
             try {
                 System.out.println("Thread2 signaling");
-                condition.signal(); // 将condition队列中的node转移到等待队列,此时还未释放锁
+                condition.signal(); // 将条件队列中的header转移到同步队列,并将其对应的线程唤醒. 注意:这里并没有锁的status-1,也没有挂起当前线程
             } finally {
-                lock.unlock(); // 此时释放锁,并唤醒等待队列中一个线程
+                lock.unlock(); // 锁的status-1,然后唤醒同步队列的头节点的线程
             }
         });
 
