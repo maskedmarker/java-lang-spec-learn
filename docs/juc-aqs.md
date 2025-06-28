@@ -1,9 +1,16 @@
 # juc-AQS
 
+AQS(AbstractQueuedSynchronizer)由volatile state和双向的FIFO链表构成.
+ConditionObject由单向链表构成.
 
 ## Node
 
+1. Node需要支持独占模式和共享模式(即排他锁场景和共享锁场景)
+2. Node不仅用于AQS的FIFOO链表,还被用于ConditionObject的单向链表.
+
 ### Node.waitStatus
+
+Node.waitStatus表示的状态也要满足独占模式和共享模式
 
 后面节点插入FIFO队列时,根据需要设置前节点的waitStatus
 也有当前线程放弃时,设置自己节点的waitStatus(???未确认)
