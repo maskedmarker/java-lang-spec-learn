@@ -151,8 +151,8 @@ private void doReleaseShared() {
                     continue; // CAS 失败重试
                 unparkSuccessor(h); // 唤醒后继节点
             }
-            else if (ws == 0 && !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
-                continue; // 标记为 PROPAGATE
+            else if (ws == 0 && !compareAndSetWaitStatus(h, 0, Node.PROPAGATE)) // 多个线程同时release, 有线程已经早先一步操作了,所以当前线程标记为 PROPAGATE
+                continue; // CAS 失败重试
         }
         if (h == head) // 如果 head 未变化,退出循环
             break;
