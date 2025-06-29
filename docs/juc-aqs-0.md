@@ -257,3 +257,37 @@ private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
     return false;
 }
 ```
+
+```text
+public final boolean hasQueuedPredecessors() {
+    // The correctness of this depends on head being initialized before tail and on head.next being accurate if the current thread is first in queue.
+    Node t = tail; // Read fields in reverse initialization order
+    Node h = head;
+    Node s;
+    return h != t &&
+        ((s = h.next) == null || s.thread != Thread.currentThread());
+}
+
+2.1 变量读取顺序
+为什么逆序读取？
+避免与 enq() 方法初始化队列时的顺序冲突（AQS 初始化队列时先设置 head，再设置 tail）
+保证可见性：volatile 写操作是 head → tail，逆序读取能感知到最新的 tail
+
+2.2 核心判断逻辑
+return h != t && 
+       ((s = h.next) == null || s.thread != Thread.currentThread());
+
+条件1：h != t
+    true：队列不为空（至少有一个等待节点）
+    false：队列为空（head == tail），直接返回 false（无竞争）
+
+条件2：(s = h.next) == null
+    true：极端并发情况下，head 已更新但 head.next 还未链式更新（非常短暂的状态）
+        此时保守认为有其他线程正在竞争，返回 true
+    false：正常情况，继续检查下一个条件
+
+条件3：s.thread != Thread.currentThread()
+    true：head.next 的线程不是当前线程，说明有其他线程更早排队
+    false：当前线程就是 head.next 的持有者（可尝试获取锁）       
+```
+
