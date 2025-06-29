@@ -4,6 +4,7 @@
 
 1. Node需要支持独占模式和共享模式(即排他锁场景和共享锁场景)
 2. Node不仅用于AQS的FIFO链表,还被用于ConditionObject的单向链表.
+3. 等待队列的head是一个dummy-node(即虚拟节点,在队列初始化时创建),后续的node都是在tail后面追加.
 
 ### Node.waitStatus
 

@@ -176,7 +176,7 @@ private Node enq(final Node node) {
     for (;;) {  // 自旋
         Node t = tail;
         if (t == null) { // 初始化
-            if (compareAndSetHead(new Node())) // 初始化时先插入head, 其他情形都是先插入tail
+            if (compareAndSetHead(new Node())) // 初始化时先插入一个dummy head, 同时表示head和tail
                 tail = head;
         } else {
             node.prev = t;
@@ -283,11 +283,11 @@ return h != t &&
 
 条件2：(s = h.next) == null
     true：极端并发情况下，head 已更新但 head.next 还未链式更新（非常短暂的状态）
-        此时保守认为有其他线程正在竞争，返回 true
+          此时保守认为有其他线程正在竞争，返回 true
     false：正常情况，继续检查下一个条件
 
 条件3：s.thread != Thread.currentThread()
-    true：head.next 的线程不是当前线程，说明有其他线程更早排队
+    true：(同步队列中的head是虚拟节点,h.next才是有意义的线程节点)head.next 的线程不是当前线程，说明有其他线程更早排队
     false：当前线程就是 head.next 的持有者（可尝试获取锁）       
 ```
 
