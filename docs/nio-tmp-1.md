@@ -26,3 +26,21 @@ protected final void implCloseChannel() throws IOException {
     }
 }    
 ```
+
+```text
+在Java NIO中，ServerSocketChannel 的 register 和 bind 方法的调用顺序是有明确要求的：
+
+正确的顺序：先 bind 后 register
+bind(SocketAddress local)：将通道绑定到指定的本地地址（端口）。
+register(Selector sel, int ops)：将通道注册到选择器，并指定感兴趣的事件（如 OP_ACCEPT）。
+
+如果先 register 再 bind 会发生什么？
+会抛出 IllegalBlockingModeException
+register 方法要求通道必须处于非阻塞模式（通过 configureBlocking(false) 设置）。但即使你设置了非阻塞模式，如果先 register 再 bind，仍然可能因为通道未绑定而无法正常监听连接请求，导致逻辑错误。
+
+底层依赖
+register 需要通道已经绑定到一个本地地址，因为选择器（Selector）需要知道具体的网络地址来监听事件。如果未绑定，选择器无法正确工作。
+
+总结
+必须先调用 bind 再调用 register。反之会导致异常或逻辑错误。这是由NIO的设计和底层系统调用（如操作系统的socket和bind）的语义决定的。
+```
