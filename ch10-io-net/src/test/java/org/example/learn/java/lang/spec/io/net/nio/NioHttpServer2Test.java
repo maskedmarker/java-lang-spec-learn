@@ -1,5 +1,7 @@
 package org.example.learn.java.lang.spec.io.net.nio;
 
+import org.junit.Test;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -8,27 +10,15 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Iterator;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * 当你调用 SocketChannel.close() 时，是否还需要从 Selector 中手动移除对应的 SelectionKey？
- * 不需要手动 remove，close() 会自动取消注册。
- *
- * 调用SocketChannel.close方法会将其SelectionKey设置为cancelled,即该SelectionKey会被放到Selector的cancelled-key,在下次select的时候被自动清除
- * SocketChannel.close会触发OS的网络栈发送tcp的FIN报文
- *
- * key.isReadable()
- * socket的input-buffer有数据了,或者对方发起了关闭tcp连接(即对方发送了FIN,本方OS回应ACK)
- * 对方发起了关闭tcp可以看作是发送了"不再发送数据"的命令信息(而非数据信息)
- */
-public class NioHttpServer {
+public class NioHttpServer2Test {
 
-    private final int port;
+    public static final int PORT = 8080;
 
-    private AtomicBoolean stopRunning = new AtomicBoolean(false);
-
-    public NioHttpServer(int port) {
-        this.port = port;
+    @Test
+    public void test0() throws Exception {
+        start();
+        System.in.read();
     }
 
     public void start() {
@@ -42,23 +32,21 @@ public class NioHttpServer {
         }).start();
     }
 
-    public void stop() {
-        stopRunning.set(true);
-    }
 
     private void handleHttp() throws Exception {
         ServerSocketChannel serverChannel = ServerSocketChannel.open();
-        // 先完成bind
-        serverChannel.bind(new InetSocketAddress(this.port));
         serverChannel.configureBlocking(false);
-
+        // 先向selector注册
         Selector selector = Selector.open();
-        // 先完成bind再向selector注册
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-        System.out.println("HTTP Server started at http://localhost:" + this.port);
+        // 再bind
+        serverChannel.bind(new InetSocketAddress(PORT));
 
-        while (!stopRunning.get()) {
+
+        System.out.println("HTTP Server started at http://localhost:" + PORT);
+
+        while (true) {
             selector.select(); // 阻塞直到有事件发生
             Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
 
@@ -71,7 +59,7 @@ public class NioHttpServer {
                     SocketChannel childChannel = serverChannel.accept();
                     childChannel.configureBlocking(false);
                     childChannel.register(selector, SelectionKey.OP_READ);
-                } else if (key.isReadable()) { // socket的input-buffer有数据了,或者对方发起了关闭tcp连接(即对方发送了FIN,本方OS回应ACK)
+                } else if (key.isReadable()) {
                     try {
                         handleRequest(key);
                     } catch (IOException e) {
@@ -79,26 +67,18 @@ public class NioHttpServer {
                         e.printStackTrace();
                     }
                 } else if (!key.isValid()) {
-                    // 调用SocketChannel.close方法会将其SelectionKey设置为cancelled,即该SelectionKey会被放到Selector的cancelled-key,在下次select的时候被自动清除
-                    // invalid的原因: until it is cancelled, its channel is closed, or its selector is closed. 前2种情况selector会自动清理,最后的情况更不用处理.
-                    // 这里是多余的吧???
                     key.cancel();
                 }
             }
         }
     }
 
-    /**
-     *
-     */
     private void handleRequest(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
+        // 不需要手动 remove，close() 会自动取消注册
         int read = client.read(buffer);
         if (read == -1) {
-            // nio设计中,只有发送了FIN才被认作是closed
-            assert !client.socket().isClosed();
-            // 发送tcp的FIN报文
             client.close();
             return;
         }

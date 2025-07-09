@@ -43,4 +43,20 @@ register 需要通道已经绑定到一个本地地址，因为选择器（Selec
 
 总结
 必须先调用 bind 再调用 register。反之会导致异常或逻辑错误。这是由NIO的设计和底层系统调用（如操作系统的socket和bind）的语义决定的。
+
+
+上面的结论是不正确的.netty先register再bind.我自己实验也没问题.
+```
+
+```text
+SelectionKey.isReadable
+当socket的input buffer中有数据时,该方法返回true;当该socket被对方关闭时,该方法也返回true
+
+SocketChannel
+A socket channel is created by invoking one of the open methods of this class. It is not possible to create a channel for an arbitrary, pre-existing socket.
+```
+
+```text
+在StackOverflow看到一个描述,说是jdk的nio代码设计的太差了.selector/socketChannel/serverSocketChannel都不是线程安全的(或者是bug).
+尽量单线程操作nio的类,这样可以规避潜在的风险.
 ```
