@@ -60,3 +60,13 @@ A socket channel is created by invoking one of the open methods of this class. I
 在StackOverflow看到一个描述,说是jdk的nio代码设计的太差了.selector/socketChannel/serverSocketChannel都不是线程安全的(或者是bug).
 尽量单线程操作nio的类,这样可以规避潜在的风险.
 ```
+
+
+```text
+在Java NIO（New I/O）中，其底层使用的I/O多路复用机制（如Selector）是基于操作系统的系统调用实现的（如Linux的epoll、Windows的IOCP等），而Java NIO的默认行为是水平触发（Level-Triggered），而非边沿触发（Edge-Triggered）。
+Java NIO 不直接支持边沿触发。如果需要边沿触发，通常需要依赖底层操作系统API（如JNI调用epoll的EPOLLET标志），但Java标准库未提供此功能。
+
+为什么Java NIO选择水平触发？
+易用性：水平触发更符合编程直觉，开发者无需担心遗漏事件或必须一次性处理所有数据。
+兼容性：不同操作系统对边沿触发的支持不一致（如Windows的IOCP与Linux的epoll机制差异较大），水平触发是更通用的模型。
+```

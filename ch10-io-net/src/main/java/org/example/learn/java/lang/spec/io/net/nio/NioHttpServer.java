@@ -20,6 +20,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * key.isReadable()
  * socket的input-buffer有数据了,或者对方发起了关闭tcp连接(即对方发送了FIN,本方OS回应ACK)
  * 对方发起了关闭tcp可以看作是发送了"不再发送数据"的命令信息(而非数据信息)
+ *
+ * selector.selectedKeys()
+ * A key may be removed directly from the selected-key set by invoking the set's remove method or by invoking the remove method of an iterator obtained from the set.
  */
 public class NioHttpServer {
 
@@ -59,12 +62,13 @@ public class NioHttpServer {
         System.out.println("HTTP Server started at http://localhost:" + this.port);
 
         while (!stopRunning.get()) {
-            selector.select(); // 阻塞直到有事件发生
+            // 阻塞直到有事件发生.(os和jvm完全隐藏了tcp的底层细节. 比如隐藏了tcp3次握手的过程和tcp收到数据后的ack自动应答)
+            selector.select();
+            // 每次select()方法结束之后,就会有一个全新的selectedKeys对象(类似于不同的快照对象),selectedKeys的元素只能通过remove方法来删除
             Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
 
             while (keys.hasNext()) {
                 SelectionKey key = keys.next();
-                keys.remove();
 
                 if (key.isAcceptable()) {
                     // netty将serverSocketChannel accept到的socketChannel称呼为childChannel
@@ -81,9 +85,12 @@ public class NioHttpServer {
                 } else if (!key.isValid()) {
                     // 调用SocketChannel.close方法会将其SelectionKey设置为cancelled,即该SelectionKey会被放到Selector的cancelled-key,在下次select的时候被自动清除
                     // invalid的原因: until it is cancelled, its channel is closed, or its selector is closed. 前2种情况selector会自动清理,最后的情况更不用处理.
-                    // 这里是多余的吧???
+                    // 这里是多余的
                     key.cancel();
                 }
+
+                // jdk使用的是水平触发(Level-Triggered)机制, 所以处理完key的事件后,必须要将其从事件集selectedKeys中移除,不然就出现无意义的循环了.
+                keys.remove();
             }
         }
     }
@@ -98,7 +105,7 @@ public class NioHttpServer {
         if (read == -1) {
             // nio设计中,只有发送了FIN才被认作是closed
             assert !client.socket().isClosed();
-            // 发送tcp的FIN报文
+            // 发送tcp的FIN报文,完成双工的本侧关闭工作
             client.close();
             return;
         }
