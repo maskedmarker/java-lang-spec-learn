@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc;
+package org.example.learn.java.lang.spec.juc.lock;
 
 import org.junit.Test;
 
