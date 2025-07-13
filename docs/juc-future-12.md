@@ -1,60 +1,110 @@
 # juc-future
 
-## 什么是Future
-Future 是 Java 5 引入的接口，用于表示一个异步计算的结果。它提供了检查计算是否完成、等待计算完成、以及获取计算结果的机制。
+## FutureTask
 
 ```text
-public interface Future<V> {
+public interface RunnableFuture<V> extends Runnable, Future<V> {
+    // Sets this Future to the result of its computation unless it has been cancelled.
+    void run();
+}
 
-    // 取消任务，mayInterruptIfRunning 表示是否允许中断正在运行的任务
-    boolean cancel(boolean mayInterruptIfRunning);
+extends Runnable:
+计算(Runnable)不需要入参也无返参,所需全部变量来自于自身初始状态
+extends Future:
+计算的side-effect会为Future设置结果
+RunnableFuture<V> extends Runnable, Future<V>:
+表示一个异步计算,该异步计算的结果可以通过get()方法获取
+```
 
-    // 任务是否已取消
-    boolean isCancelled();
-
-    // 任务是否已完成（正常完成、异常或取消）
-    boolean isDone();
-
-    // 阻塞获取结果（会抛出 InterruptedException, ExecutionException）
-    V get() throws InterruptedException, ExecutionException;
-
-    // 带超时的阻塞获取结果
-    V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException;
+```text
+public class FutureTask<V> implements RunnableFuture<V> {
+    // 表示该计算的状态
+    private volatile int state;
+    
+    /** 构造函数的入参最终都要转化为等价的Callable, Callable的call()方法的返回值就是异步计算的结果值 */
+    private Callable<V> callable;
+    
+    // 记录执行该计算任务的线程
+    private volatile Thread runner;
+    // Treiber stack of waiting threads  (Treiber Stack 是一种著名的无锁（lock-free）栈（stack）实现,它使用原子操作 CAS（Compare-And-Swap）来修改栈顶指针)
+    private volatile WaitNode waiters;
+    
+    // Callable:定义计算过程且计算结果作为异步计算的值
+    public FutureTask(Callable<V> callable) {
+        if (callable == null)
+            throw new NullPointerException();
+        this.callable = callable;
+        this.state = NEW;
+    }
+    
+    // 构造FutureTask时已经定义好了异步计算的结果值result,但是想要获取到该结果值,需要等到异步计算执行完才能获取到
+    public FutureTask(Runnable runnable, V result) {
+        this.callable = Executors.callable(runnable, result);
+        this.state = NEW;
+    }    
 }
 ```
 
-## 如何使用Future
-
-通常通过 ExecutorService 提交任务（Callable 或 Runnable）来获取 Future 实例。
 ```text
-// 提交一个 Callable 任务，返回 Future
-Future<Integer> future = executor.submit(() -> {
-    TimeUnit.SECONDS.sleep(2); // 模拟耗时计算
-    return 42;
-});
+private static final int NEW          = 0;
+private static final int COMPLETING   = 1;
+private static final int NORMAL       = 2;
+private static final int EXCEPTIONAL  = 3;
+private static final int CANCELLED    = 4;
+private static final int INTERRUPTING = 5;
+private static final int INTERRUPTED  = 6;
+
+The run state of this task, initially NEW. 
+The run state transitions to a terminal state only in methods set, setException, and cancel. 
+During completion, state may take on transient values of COMPLETING (while outcome is being set) or INTERRUPTING (only while interrupting the runner to satisfy a cancel(true)). 
+Transitions from these intermediate to final states use cheaper ordered/lazy writes because values are unique and cannot be further modified. 
+Possible state transitions: 
+NEW -> COMPLETING -> NORMAL 
+NEW -> COMPLETING -> EXCEPTIONAL 
+NEW -> CANCELLED 
+NEW -> INTERRUPTING -> INTERRUPTED
+
+
+set, setException, and cancel能改动FutureTask的状态
+COMPLETING/INTERRUPTING都是瞬时态,然后必然到终态.
+
+    protected void set(V v) {
+        if (STATE.compareAndSet(this, NEW, COMPLETING)) {
+            outcome = v;
+            STATE.setRelease(this, NORMAL); // final state
+            finishCompletion();
+        }
+    }
+
+    protected void setException(Throwable t) {
+        if (STATE.compareAndSet(this, NEW, COMPLETING)) {
+            outcome = t;
+            STATE.setRelease(this, EXCEPTIONAL); // final state
+            finishCompletion();
+        }
+    }
+
+    public boolean cancel(boolean mayInterruptIfRunning) {
+        if (!(state == NEW && STATE.compareAndSet(this, NEW, mayInterruptIfRunning ? INTERRUPTING : CANCELLED)))
+            return false;
+        try {
+            if (mayInterruptIfRunning) {
+                try {
+                    Thread t = runner;
+                    if (t != null)
+                        t.interrupt();
+                } finally { // final state
+                    STATE.setRelease(this, INTERRUPTED);
+                }
+            }
+        } finally {
+            finishCompletion();
+        }
+        return true;
+    }
+    
+因为COMPLETING/INTERRUPTING都是瞬时态,然后必然到终态. 所以
+    public boolean isDone() {
+        return state != NEW;
+    }
 ```
-
-## Future 的局限性
-虽然 Future 提供了异步能力，但存在以下限制：
-1. 无法手动完成：任务一旦提交，无法手动设置结果（除非通过复杂手段）。 
-2. 阻塞问题：get() 方法会阻塞，可能导致性能问题。 
-3. 链式调用困难：无法直接对结果进行后续操作（如回调、组合）。 
-4. 异常处理繁琐：需要捕获 ExecutionException 并解析原始异常。
-
-
-## 现代替代方案：CompletableFuture
-Java 8 引入的 CompletableFuture 是对 Future 的增强，支持：
-1. 非阻塞回调（thenApply, thenAccept）。 
-2. 组合多个异步操作（thenCompose, allOf）。 
-3. 主动完成或异常完成（complete(), completeExceptionally()）。
-
-总结
-
-特性     	    Future	       CompletableFuture
-异步计算	        ✅ 支持	       ✅ 支持
-阻塞获取结果	    ✅ get()	   ✅ get()（不推荐）
-非阻塞回调	    ❌ 不支持	   ✅ thenApply 等
-组合多个任务	    ❌ 复杂	       ✅ thenCompose
-手动完成/异常完成	❌ 不支持	   ✅ complete()
-
-
