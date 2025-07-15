@@ -50,7 +50,7 @@ public class CompletableFutureTest {
 
         try {
             CompletableFuture<String> cf = CompletableFuture.supplyAsync(() -> "Hello", executor);
-            cf.thenAccept(System.out::println); // 非阻塞回调
+            cf.thenAccept(System.out::println);
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
