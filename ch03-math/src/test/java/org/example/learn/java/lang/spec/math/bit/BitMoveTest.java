@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.math;
+package org.example.learn.java.lang.spec.math.bit;
 
 import org.junit.Test;
 
