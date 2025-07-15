@@ -1,5 +1,6 @@
 package org.example.learn.java.lang.spec.math.bit;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 /**
@@ -31,5 +32,18 @@ public class BitOperatorTest {
         highestOneBit = Integer.highestOneBit(Integer.MIN_VALUE);
         System.out.println("highestOneBit = " + highestOneBit);
         System.out.println("toBinaryString(highestOneBit) = " + Integer.toBinaryString(highestOneBit));
+    }
+
+    /**
+     * ~ 是一个按位取反运算符（bitwise complement operator）
+     * 只适用于 整数类型（byte, short, int, long），不能用于浮点数、boolean 或对象类型
+     *
+     * ~ 将整数的每一个二进制位都反转（0 变 1，1 变 0）
+     */
+    @Test
+    public void testBitwiseComplementOperator() {
+        int mask = 0x0000ffff;
+        System.out.println("Integer.toHexString(~mask) = " + Integer.toHexString(~mask));
+        Assert.assertTrue((~mask) == 0xffff0000);
     }
 }
