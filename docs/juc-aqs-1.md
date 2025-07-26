@@ -16,8 +16,21 @@ Node.waitStatus表示的状态也要满足独占模式和共享模式
 同步队列中,Node.waitStatus没有CONDITION
 条件队列中,Node.waitStatus没有SIGNAL
 
+
 ```text
-AbstractQueuedSynchronizer.Node.waitStatus 是一个非常关键的字段,用于描述队列中每个节点(线程)当前的等待状态.它用于协调线程的阻塞、唤醒和取消逻辑.
+1. SIGNAL (-1): 
+    The successor of this node is (or will soon be) blocked (via park), so the current node must unpark its successor when it releases or cancels.
+2. CANCELLED (1): 
+    This node is cancelled due to timeout or interrupt. Nodes never leave this state.
+3. CONDITION (-2): 
+    This node is currently on a condition queue. It will not be used as a sync queue node until transferred, at which time the status will be set to 0.
+4. PROPAGATE (-3): 
+    A releaseShared should be propagated to other nodes. This is set (for head node only) in doReleaseShared to ensure propagation continues.
+5. 0: 
+    None of the above.
+```
+```text
+AbstractQueuedSynchronizer.Node.waitStatus 是一个非常关键的字段.它用于协调线程的阻塞、唤醒和取消逻辑.
 
 waitStatus 的取值与含义
 static final int CANCELLED  =  1;
