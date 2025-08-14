@@ -8,12 +8,24 @@ import org.junit.Test;
 public class BreakTest {
 
     @Test
-    public void testNoException() {
+    public void test0() {
         outer: for (int i = 0; i < 5; i++) {
             System.out.println("begin i = " + i);
             for (int j = 0; j < 5; j++) {
                 System.out.println("j = " + j);
                 if (j == 3) break outer;
+            }
+            System.out.println("end i = " + i);
+        }
+    }
+
+    @Test
+    public void test1() {
+        outer: for (int i = 0; i < 5; i++) {
+            System.out.println("begin i = " + i);
+            for (int j = 0; j < 5; j++) {
+                System.out.println("j = " + j);
+                if (j == 3) continue outer;
             }
             System.out.println("end i = " + i);
         }
