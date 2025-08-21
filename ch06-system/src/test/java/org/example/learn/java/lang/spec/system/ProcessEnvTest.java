@@ -7,6 +7,7 @@ import java.util.Set;
 
 /**
  * 进程环境变量
+ * 具体指的就是操作系统的环境变量
  */
 public class ProcessEnvTest {
 
