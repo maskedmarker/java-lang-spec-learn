@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc.thread;
+package org.example.learn.java.lang.spec.thread;
 
 import org.junit.Test;
 

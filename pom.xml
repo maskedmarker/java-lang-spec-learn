@@ -22,6 +22,7 @@
         <module>ch20-juc</module>
         <module>ch09-io-file</module>
         <module>ch10-io-net</module>
+        <module>ch21-thread</module>
     </modules>
 
     <properties>
