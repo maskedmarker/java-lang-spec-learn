@@ -1,4 +1,4 @@
-package org.example.learn.java.spec.reflection.generic.builder;
+package org.example.learn.java.lang.spec.other.generic.builder;
 
 import org.junit.Test;
 
