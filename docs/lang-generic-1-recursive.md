@@ -3,7 +3,12 @@
 递归泛型,就是一个泛型类或接口,其类型参数被定义为其自身.
 这听起来有点“我生了我自己”的悖论感,但它在编程中非常有用,主要目的是为了在继承链中保持类型的精确性.
 
-
+The Canonical Form
+```text
+class SelfBounded<T extends SelfBounded<T>> {
+    // ...
+}
+```
 
 ## 为什么需要它？
 
