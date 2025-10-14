@@ -121,4 +121,91 @@ public class ThreadInterruptTest {
             throw new RuntimeException(e);
         }
     }
+
+    /**
+     * interrupt线程,并不会影响获取synchronized的monitor
+     */
+    @Test
+    public void test21() throws InterruptedException {
+        final Object lock = new Object();
+
+        Thread workerThread = new Thread("worker-thread"){
+            @Override
+            public void run() {
+                try {
+                    Thread.currentThread().interrupt();
+
+                    synchronized (lock) {
+                        System.out.println("中断线程,并不会影响获取synchronized monitor");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+        workerThread.start();
+
+        workerThread.join();
+    }
+
+    @Test
+    public void test22() throws InterruptedException {
+        final Object lock = new Object();
+
+
+        final AtomicBoolean hasGotLock = new AtomicBoolean(false);
+        final AtomicBoolean readyToReleaseLock = new AtomicBoolean(false);
+
+        Thread holdingLockThread = new Thread("worker-thread-1"){
+            @Override
+            public void run() {
+                try {
+                    System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                    Thread.currentThread().interrupt();
+
+                    synchronized (lock) {
+                        System.out.printf("thread[%s] has got synchronized lock \n", Thread.currentThread().getName());
+                        System.out.printf("中断线程,并不会影响获取synchronized monitor. thread[%s] isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+
+                        hasGotLock.set(true);
+
+                        // 等待通知,然后跳出synchronized块
+                        while (!readyToReleaseLock.get()) {
+                            Thread.yield();
+                        }
+                    }
+
+                    System.out.printf("thread[%s] is at the end of running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+
+        Thread acquringLockThread = new Thread("worker-thread-2") {
+            @Override
+            public void run() {
+                System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+
+                synchronized (lock) {
+                    System.out.printf("thread[%s] has got synchronized lock \n", Thread.currentThread().getName());
+                }
+
+                System.out.printf("thread[%s] is at the end of running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+            }
+        };
+
+
+        holdingLockThread.start();
+
+        while (!hasGotLock.get()) {
+            Thread.yield();
+        }
+        acquringLockThread.start();
+
+
+        // 等待其他线程结束后,结束测试方法
+        holdingLockThread.join();
+        acquringLockThread.join();
+    }
 }
