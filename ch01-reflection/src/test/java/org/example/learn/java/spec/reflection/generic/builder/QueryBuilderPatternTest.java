@@ -1,7 +1,11 @@
-package org.example.learn.java.spec.reflection.generic;
+package org.example.learn.java.spec.reflection.generic.builder;
 
 import org.junit.Test;
 
+/**
+ * builder模式
+ * 未使用泛型/抽象
+ */
 public class QueryBuilderPatternTest {
 
     public static class QueryBuilder {

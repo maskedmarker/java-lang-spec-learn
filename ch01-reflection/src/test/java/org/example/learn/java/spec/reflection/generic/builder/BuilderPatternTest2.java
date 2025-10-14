@@ -1,8 +1,12 @@
-package org.example.learn.java.spec.reflection.generic;
+package org.example.learn.java.spec.reflection.generic.builder;
 
 import org.junit.Test;
 
-public class BuilderPatternTest {
+/**
+ * builder模式
+ * 加入了泛型/抽象类
+ */
+public class BuilderPatternTest2 {
 
     public static abstract class BaseBuilder<T, B extends BaseBuilder<T, B>> {
 
