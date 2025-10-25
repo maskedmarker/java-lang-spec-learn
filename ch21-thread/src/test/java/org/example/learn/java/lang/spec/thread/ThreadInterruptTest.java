@@ -148,7 +148,10 @@ public class ThreadInterruptTest {
         workerThread.join();
     }
 
-    @Test
+    /**
+     * TODO
+     */
+    @Test(timeout = 5 * 1000)
     public void test22() throws InterruptedException {
         final Object lock = new Object();
 
@@ -161,13 +164,13 @@ public class ThreadInterruptTest {
             public void run() {
                 try {
                     System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
-                    Thread.currentThread().interrupt();
 
                     synchronized (lock) {
                         System.out.printf("thread[%s] has got synchronized lock \n", Thread.currentThread().getName());
+                        hasGotLock.set(true);
+
                         System.out.printf("中断线程,并不会影响获取synchronized monitor. thread[%s] isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
 
-                        hasGotLock.set(true);
 
                         // 等待通知,然后跳出synchronized块
                         while (!readyToReleaseLock.get()) {
@@ -185,6 +188,11 @@ public class ThreadInterruptTest {
         Thread acquringLockThread = new Thread("worker-thread-2") {
             @Override
             public void run() {
+                // worker-thread-1先获取到monitor,然后worker-thread-2再去获取monitor
+                while (!hasGotLock.get()) {
+                    Thread.yield();
+                }
+
                 System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
 
                 synchronized (lock) {
@@ -196,15 +204,17 @@ public class ThreadInterruptTest {
         };
 
 
+        // 因为有hasGotLock变量控制,所以worker-thread-1先获取到monitor,然后worker-thread-2再去获取monitor.worker-thread-2再去获取monitor会被阻塞
         holdingLockThread.start();
-
-        while (!hasGotLock.get()) {
-            Thread.yield();
-        }
         acquringLockThread.start();
 
+        // 等一会,保证worker-thread-2获取monitor时被阻塞
+        TimeUnit.SECONDS.sleep(1);
+        // 通过interrupt worker-thread-2,也不会结束worker-thread-2的阻塞状态,最终触发junit的timeout机制
+        acquringLockThread.interrupt();
 
-        // 等待其他线程结束后,结束测试方法
+
+        // 等待其他线程结束后,再结束测试方法,这样可以防止junit提前结束所有线程
         holdingLockThread.join();
         acquringLockThread.join();
     }
