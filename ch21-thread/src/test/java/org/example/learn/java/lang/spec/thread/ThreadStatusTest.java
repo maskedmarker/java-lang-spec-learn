@@ -98,8 +98,14 @@ public class ThreadStatusTest {
 
 
     /**
-     * 线程在进行I/O操作时,虽然耗时比较久,但仍然在逻辑上当作一个不可细分的操作
+     * 线程在进行I/O操作时,虽然耗时比较久,但仍然在逻辑上当作一个不可打断的操作(尤其是磁盘的读写操作)
      * 所以线程在I/O操作时,线程状态仍然为runnable
+     *
+     *
+     * 在linux系统中, 将I/O操作时线程的状态细分为TASK_INTERRUPTIBLE/TASK_UNINTERRUPTIBLE
+     * TASK_INTERRUPTIBLE主要针对  Read/write socket or pipe
+     * TASK_UNINTERRUPTIBLE 主要针对 Read/write disk (filesystem I/O)
+     * Non-blocking I/O使用的是TASK_RUNNING
      */
     @Test
     public void test2() throws InterruptedException {
