@@ -95,4 +95,35 @@ public class ThreadStatusTest {
         System.out.println("holdingLockThread status = " + holdingLockThread.getState());
         System.out.println("acquiringLockThread status = " + acquiringLockThread.getState());
     }
+
+
+    /**
+     * 线程在进行I/O操作时,虽然耗时比较久,但仍然在逻辑上当作一个不可细分的操作
+     * 所以线程在I/O操作时,线程状态仍然为runnable
+     */
+    @Test
+    public void test2() throws InterruptedException {
+
+        Thread workerThread = new Thread("worker-thread"){
+            @Override
+            public void run() {
+                try {
+                    System.out.printf("thread[%s] is ready to read from std\n", Thread.currentThread().getName());
+                    System.in.read();
+                    System.out.printf("thread[%s] is at the end of running\n", Thread.currentThread().getName());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+        workerThread.start();
+
+        while (Thread.State.NEW.equals(workerThread.getState())) {
+            Thread.yield();
+        }
+        TimeUnit.SECONDS.sleep(5);
+
+        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        Assert.assertTrue("线程在进行I/O操作时,其状态为runnable", Thread.State.RUNNABLE.equals(workerThread.getState()));
+    }
 }
