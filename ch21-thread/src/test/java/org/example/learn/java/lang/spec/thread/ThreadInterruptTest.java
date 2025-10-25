@@ -3,11 +3,8 @@ package org.example.learn.java.lang.spec.thread;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 注意区分
@@ -149,7 +146,7 @@ public class ThreadInterruptTest {
     }
 
     /**
-     * TODO
+     * 验证thread因为monitor而被blocked时, 通过interrupt也无法中断阻塞状态
      */
     @Test(timeout = 5 * 1000)
     public void test22() throws InterruptedException {
@@ -163,14 +160,15 @@ public class ThreadInterruptTest {
             @Override
             public void run() {
                 try {
-                    System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                    // worker-thread-1通过判断hasGotLock从而避免因为获取monitor而被阻塞
+                    while (hasGotLock.get()) {
+                        Thread.yield();
+                    }
 
+                    System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
                     synchronized (lock) {
                         System.out.printf("thread[%s] has got synchronized lock \n", Thread.currentThread().getName());
                         hasGotLock.set(true);
-
-                        System.out.printf("中断线程,并不会影响获取synchronized monitor. thread[%s] isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
-
 
                         // 等待通知,然后跳出synchronized块
                         while (!readyToReleaseLock.get()) {
@@ -188,15 +186,14 @@ public class ThreadInterruptTest {
         Thread acquringLockThread = new Thread("worker-thread-2") {
             @Override
             public void run() {
-                // worker-thread-1先获取到monitor,然后worker-thread-2再去获取monitor
+                // worker-thread-2通过判断hasGotLock从而故意因为获取monitor而被阻塞
                 while (!hasGotLock.get()) {
                     Thread.yield();
                 }
 
-                System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
-
+                System.out.printf("before acquiring monitor, thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
                 synchronized (lock) {
-                    System.out.printf("thread[%s] has got synchronized lock \n", Thread.currentThread().getName());
+                    System.out.printf("thread[%s] has got synchronized lock  | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
                 }
 
                 System.out.printf("thread[%s] is at the end of running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
@@ -209,9 +206,15 @@ public class ThreadInterruptTest {
         acquringLockThread.start();
 
         // 等一会,保证worker-thread-2获取monitor时被阻塞
-        TimeUnit.SECONDS.sleep(1);
+        while (!acquringLockThread.getState().equals(Thread.State.BLOCKED)) {
+            Thread.yield();
+        }
+        System.out.printf("before interrupt thread[%s], the thread status is %s\n", acquringLockThread.getName(), acquringLockThread.getState());
+
+
         // 通过interrupt worker-thread-2,也不会结束worker-thread-2的阻塞状态,最终触发junit的timeout机制
         acquringLockThread.interrupt();
+        System.out.printf("after interrupt thread[%s], the thread status is %s\n", acquringLockThread.getName(), acquringLockThread.getState());
 
 
         // 等待其他线程结束后,再结束测试方法,这样可以防止junit提前结束所有线程
