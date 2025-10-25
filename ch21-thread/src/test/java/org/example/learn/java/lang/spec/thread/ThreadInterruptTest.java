@@ -183,7 +183,7 @@ public class ThreadInterruptTest {
             }
         };
 
-        Thread acquringLockThread = new Thread("worker-thread-2") {
+        Thread acquiringLockThread = new Thread("worker-thread-2") {
             @Override
             public void run() {
                 // worker-thread-2通过判断hasGotLock从而故意因为获取monitor而被阻塞
@@ -203,22 +203,22 @@ public class ThreadInterruptTest {
 
         // 因为有hasGotLock变量控制,所以worker-thread-1先获取到monitor,然后worker-thread-2再去获取monitor.worker-thread-2再去获取monitor会被阻塞
         holdingLockThread.start();
-        acquringLockThread.start();
+        acquiringLockThread.start();
 
         // 等一会,保证worker-thread-2获取monitor时被阻塞
-        while (!acquringLockThread.getState().equals(Thread.State.BLOCKED)) {
+        while (!acquiringLockThread.getState().equals(Thread.State.BLOCKED)) {
             Thread.yield();
         }
-        System.out.printf("before interrupt thread[%s], the thread status is %s\n", acquringLockThread.getName(), acquringLockThread.getState());
+        System.out.printf("before interrupt thread[%s], the thread status is %s\n", acquiringLockThread.getName(), acquiringLockThread.getState());
 
 
         // 通过interrupt worker-thread-2,也不会结束worker-thread-2的阻塞状态,最终触发junit的timeout机制
-        acquringLockThread.interrupt();
-        System.out.printf("after interrupt thread[%s], the thread status is %s\n", acquringLockThread.getName(), acquringLockThread.getState());
+        acquiringLockThread.interrupt();
+        System.out.printf("after interrupt thread[%s], the thread status is %s\n", acquiringLockThread.getName(), acquiringLockThread.getState());
 
 
         // 等待其他线程结束后,再结束测试方法,这样可以防止junit提前结束所有线程
         holdingLockThread.join();
-        acquringLockThread.join();
+        acquiringLockThread.join();
     }
 }
