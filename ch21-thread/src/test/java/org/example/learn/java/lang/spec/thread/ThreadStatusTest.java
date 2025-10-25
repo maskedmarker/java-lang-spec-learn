@@ -103,9 +103,11 @@ public class ThreadStatusTest {
      *
      *
      * 在linux系统中, 将I/O操作时线程的状态细分为TASK_INTERRUPTIBLE/TASK_UNINTERRUPTIBLE
-     * TASK_INTERRUPTIBLE主要针对  Read/write socket or pipe
+     * TASK_INTERRUPTIBLE主要针对  Read socket or pipe
      * TASK_UNINTERRUPTIBLE 主要针对 Read/write disk (filesystem I/O)
      * Non-blocking I/O使用的是TASK_RUNNING
+     *
+     * 如果希望I/O操作时可以被"中断",可以使用操作系统提供的non-blocking接口或者AIO接口
      */
     @Test
     public void test2() throws InterruptedException {
