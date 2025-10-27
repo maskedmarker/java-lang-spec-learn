@@ -53,4 +53,20 @@ public class ArithmeticOperatorTest {
         System.out.println("quotient = " + quotient);
         System.out.println("remainder = " + remainder);
     }
+
+    /**
+     * 除号运算(浮点型与整型)
+     * 浮点型与整型运算时,按更宽的数据类型来(即 浮点型)
+     * 商和余数都是浮点型的
+     */
+    @Test
+    public void testDivisionFloatAndInteger() {
+        float dividend = 10.0F;
+        int divisor = 3;
+
+        float quotient = dividend / divisor;
+        float remainder = dividend % divisor;
+        System.out.println("quotient = " + quotient);
+        System.out.println("remainder = " + remainder);
+    }
 }
