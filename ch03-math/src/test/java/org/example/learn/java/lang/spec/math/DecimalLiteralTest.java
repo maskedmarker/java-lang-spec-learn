@@ -3,7 +3,6 @@ package org.example.learn.java.lang.spec.math;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.math.BigDecimal;
 
 public class DecimalLiteralTest {
 
