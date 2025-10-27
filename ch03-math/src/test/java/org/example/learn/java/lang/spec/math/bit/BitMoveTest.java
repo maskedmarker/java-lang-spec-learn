@@ -1,6 +1,9 @@
 package org.example.learn.java.lang.spec.math.bit;
 
+import org.junit.Assert;
 import org.junit.Test;
+
+import java.math.BigInteger;
 
 /**
  *
@@ -30,5 +33,16 @@ public class BitMoveTest {
         // Shift operation '<<' by overly large constant value 32
         System.out.println("Integer.toBinaryString((b1 << 32)) = " + Integer.toBinaryString((b1 << 32)));
         System.out.println("Integer.toBinaryString((b1 << 32)) = " + Integer.toBinaryString(((b1 << 31) << 3)));
+    }
+
+    /**
+     * << 太多时,可以使用BigInteger(arbitrary-precision integers)
+     */
+    @Test
+    public void test1() {
+
+        BigInteger bigInteger = BigInteger.ONE.shiftLeft(100);
+        System.out.println("(1 << 100) = " + bigInteger);
+        Assert.assertEquals(new BigInteger("1267650600228229401496703205376"), BigInteger.ONE.shiftLeft(100));
     }
 }
