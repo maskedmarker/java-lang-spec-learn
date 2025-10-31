@@ -1,5 +1,8 @@
 # BigInteger
 
+BigInteger可以表示工程上的"无穷大/小"的整数;BigDecimal可以表示工程上的"无穷大/小"的浮点数
+
+
 ```text
 正numeral的书面字符串表示为(an-1 an-2 ... a1 a0)b
 numeral的值value=(an-1)*b^(n-1) + (an-2)*b^(n-2) + ... + (a1)*b^1 + (a0)*b^0
@@ -13,11 +16,9 @@ b^(n-1)对应的名词是位权
 BigInteger将数值的正负号和绝对值分开对待的.
 
 主要属性:
-final int signum;
-final int[] mag;
+final int signum; // signum存放符号,signum为0即代表0；signum为1即代表正数、signum为-1即代表负数
+final int[] mag;  // mag数组仅仅用来存放绝对值
 
-signum存放符号,signum为0即代表0；signum为1即代表正数、signum为-1即代表负数
-mag数组仅仅用来存放绝对值
 
 BigInteger通过int[]以2^32进制的形式保存数值.
 2~36(10数字+26字母)进制下,一个数字或字母就可以表示该进制下的一个symbol,但是2^32进制下的symbol无法用某个数字或字母表示,所以只强调symbol的数值
@@ -31,14 +32,40 @@ BigInteger通过int[]以2^32进制的形式保存数值.
 
 在2^32进制下,每个symbol的数值用int[]的每个元素来容纳,那么
 [287, 1912276171]的数值就是287*(2^32^1)+1912276171*(2^32^0)=1234567890123
+
+BigInteger表示的整数值value为:
+value = signum × (Σ mag[i] × 2^(32 * (len-1 - i)))
+i的取值范围[0, mag.len-1]
 ````
 
+```text
+destructiveMulAdd()是构造BigInteger的核心的算法部分.
+bitsPerDigit/digitsPerInt都是用来预估内存分配空间的,先不用管.
+
+destructiveMulAdd()的算法过程用如下类比:
+读取10进制数的字符串"12345",并求出其大小
+读取字符1      临时大小为1*10^0 =1 
+读取字符12     临时大小为(1*10^0)*10^1 + 2*10^0 =12
+读取字符123    临时大小为((1*10^0)*10^1 + 2*10^0)*10^1 + 3*10^0 =123
+读取字符1234   临时大小为(((1*10^0)*10^1 + 2*10^0)*10^1 + 3*10^0)*10^1 + 4*10^0  =1234
+读取字符12345  临时大小为1((((1*10^0)*10^1 + 2*10^0)*10^1 + 3*10^0)*10^1 + 4*10^0)*10^1 + 5*10^0 =12345
+
+在十进制下,用int[]类型的mag容纳临时大小,
+读取字符到1,临时大小为1时, mag为 [1]
+读取字符到12,临时大小为12时, 从个十位中间切开,((1*10)+2)/10=1..2  mag为 [1, 2]
+读取字符到123,临时大小为123时, 从十百位中间切开,((12*10)+3)/100=1..23 23/10=2..3 mag为 [1, 2, 3]
+读取字符到1234,临时大小为1234时, 从百千位中间切开, 1234/1000=1..234 234/100=2..34 34/10=3..4  mag为 [1, 2, 3, 4]
+读取字符到12345,临时大小为12345时, 从千万位中间切开, 12345/10000=1..2345 2345/1000=2..345 345/100=3..45 45/10=4..5  mag为 [1, 2, 3, 4, 5]
+```
 
 
-BigInteger的mag数组仅仅用来存放绝对值的二进制位，其符号被signum存放，signum为0即代表0；signum为1即代表正数、signum为-1即代表负数
+
+
+```text
 为什么mag数组中符号位要单独拎出来？就是说为什么大数不用补码表示，每个元素的符号位其实不参与表示大数。 
 - 不用补码存储可以按照我们传统的计算思路完成运算 
 - 如果采用补码，乘除等操作将会变得很复杂，并且，获取相反数、绝对值等算法的复杂度也会由常数变为线性
+```
 
 ```text
 主要属性:
@@ -62,26 +89,15 @@ in big-endian order
 数组mag的index类比内存地址,index较小的元素存储更重要的数据.即the zeroth element of this array is the most-significant int of the magnitude
 ```
 
-```text
-value = signum × (Σ mag[i] × 2^(32 * (len-1 - i)))
-
-i的取值范围[0, mag.len-1]
-```
-
 
 ```text
+字符串val中每个字符都是radix进制的一个symbol.
+BigInteger(String val, int radix)将radix进制的数据转换为2^32进制的数据
+
 java.math.BigInteger.BigInteger(java.lang.String)
-
 BigInteger支持简单的正/负号
 BigInteger支持leading-zeros
 BigInteger不支持科学计数法
-```
-
-
-
-```text
-字符串val中每个字符都是radix进制的一个digit.
-BigInteger(String val, int radix)将radix进制的数据转换为2^32进制的数据
 
 public BigInteger(String val, int radix) {
     // cursor表示正要解析的字符的index(0-based)
