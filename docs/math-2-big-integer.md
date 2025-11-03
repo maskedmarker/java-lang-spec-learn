@@ -91,10 +91,6 @@ a4a3a2a1*x -> [((a4*x)/10), (a4*x)%10+((a3*x)/10), (a3*x)%10+((a2*x)/10), (a2*x)
 ```
 
 ```text
-destructiveMulAdd()是构造BigInteger的核心的算法部分.
-bitsPerDigit/digitsPerInt都是用来预估内存分配空间的,先不用管(假定内存空间足够).
-
-destructiveMulAdd()的算法过程用如下类比:
 读取10进制数的字符串"12345",并求出其大小
 读取字符1      临时大小为1*10^0 =1 
 读取字符12     临时大小为(1*10^0)*10^1 + 2*10^0 =12
@@ -122,15 +118,7 @@ mag为[1],读取字符到12,int[1]不能存储大于9的数值,int[2]能存储�
 mag为[1, 2],读取字符到123,int[2]不能存储大于99的数值,int[3]能存储不大于999(9*100+9*10+9)的数值,扩容为int[3],123-100=23|23-20=3,mag为[1, 2, 3]
 mag为[1, 2, 3],读取字符到1234,int[3]不能存储大于999的数值,int[4]能存储不大于9999(9*1000+9*100+9*10+9)的数值,扩容为int[4],1234-1000=234|234-200=34|34-30=4,mag为[1, 2, 3, 4]
 mag为[1, 2, 3, 4],读取字符到12345,int[4]不能存储大于9999的数值,int[5]能存储不大于99999(9*10000+9*1000+9*100+9*10+9)的数值,扩容为int[4],12345-10000=2345|2345-2000=345|345-300=45|45-40=5,mag为[1, 2, 3, 4, 5]
-----------------------
-上面是笨方法,下面采用更科学直观的方法
-用int[]类型的mag来容纳临时值,同时采用十进制,同时假定空间足够
-mag初始值为[0, 0, 0, 0, 0]
-mag为[0],读取字符到1, 1%10=1,carry=1/10=0,mag为[0, 0, 0, 0, 1]
-mag为[1],读取字符到2,mag左移升位, mag[3]=mag[0]+(mag[0]*10)%10  mag[0]=(mag[0]*10)/10, 然后最低位加2 mag[1]=mag[1]+2, mag为[0, 0, 0, 1, 2]
-mag为[1, 2],读取字符到3,mag左移升位,mag[2]=mag[2]+(mag[1]*10)/10  mag[1]=(mag[2]*10)/10 mag[1]=(mag[0]*10)/10
-mag为[1, 2, 3],读取字符到4,mag左移升位,
-mag为[1, 2, 3, 4],读取字符到5,mag左移升位,
+
 
 123-100=23|23-20=3的计算逻辑是这样的:
 因为要用int[3]容纳,
@@ -156,38 +144,41 @@ mag占用的内存空间为mag[1]=(48)10=(00110000)2,mag[0]=(67)10=(01000011)2,�
 
 至此,我们可以得出结论:
 如果使用int[]来存储数据,那么为了提高内存使用率,需要采用2^32进制.
--------------------------------------------------
-
-
-destructiveMulAdd()的算法过程用如下类比:
-mag用int[]类型的数据结构,同时采用2^32进制(假定数组的长度自动扩容).
-读取10进制数的字符串"1234567890123",并求出其大小
-读到字符1    临时大小为1,1%2^32=1,carry=1/2^32=0,mag为[1]
-读到字符2    临时大小为mag[0]*10+2=12,12%2^32=12,carry=12/2^32=0,mag为[12]
-读到字符3    临时大小为mag[0]*10+3=123,123%2^32=123,carry=123/2^32=0,mag为[123]
-读到字符4    临时大小为mag[0]*10+4=1234,1234%2^32=1234,carry=1234/2^32=0,mag为[1234]
-读到字符5    临时大小1mag[0]*10+5=12345,12345%2^32=12345,carry=12345/2^32=0,mag为[12345]
-....
-
-
-
-
--------------------------------------------------
-
-在8进制下,用int[]类型的mag容纳临时大小, 2^8=256
-mag为[0],读取字符到1, mag为 [1]
-
 ```
 
 ```text
-在十进制下,用int[]类型的mag容纳临时值,
-mag为[0],读取字符到1, mag为 [1]
-mag为[1],读取字符到12,mag[0]升位,mag为[1, 0], 从个十位中间切开, mag为 [1, 2]
-mag为[1, 2],读取字符到123,mag[1]升位,mag为[1, 2, 0], 从十百位中间切开,mag为 [1, 2, 3]
-mag为[1, 2, 3],读取字符到1234,mag[2]升位,mag为[1, 2, 3, 0], 从百千位中间切开, mag为 [1, 2, 3, 4]
-mag为[1, 2, 3, 4],读取字符到12345,mag[3]升位,mag为[1, 2, 3, 4, 0], 从千万位中间切开, mag为 [1, 2, 3, 4, 5]
+⚡ destructiveMulAdd
 
-注意: 整个过程中,不涉及到carry.
+destructiveMulAdd()是构造BigInteger的核心的算法部分.
+bitsPerDigit/digitsPerInt都是用来预估内存分配空间的,先不用管(假定内存空间足够).
+
+
+将int[]类型的x看作2^32进制的数值,靠左侧的位权更高
+private static void destructiveMulAdd(int[] x, int y, int z) {
+    long ylong = y & 0xffffffffL;
+    long zlong = z & 0xffffffffL;
+    long carry = 0;
+
+    // x的每个元素乘以y,如果结果大于int值,溢出值加到左侧的元素上.
+    // 因为靠左侧的位权更高,所以只能从最右侧开始
+    for (int i = x.length - 1; i >= 0; i--) {
+        long product = (x[i] & 0xffffffffL) * ylong + carry; // 用更长的long来容纳计算中的临时值
+        x[i] = (int) product;   // 也可以这样计算本位值: product%(2^32)
+        carry = product >>> 32; // 溢出值,也就是进位值
+    }
+
+    // 最右侧元素再加上z,可能发生连锁进位
+    long sum = (x[x.length - 1] & 0xffffffffL) + zlong;
+    x[x.length - 1] = (int) sum; // 也可以这样计算本位值: product%(2^32)
+    carry = sum >>> 32; // 可能存在溢出值,也就是进位值
+
+    // propagate carry if necessary
+    for (int i = x.length - 2; carry != 0 && i >= 0; i--) {
+        long v = (x[i] & 0xffffffffL) + carry;
+        x[i] = (int) v;
+        carry = v >>> 32;
+    }
+}
 ```
 
 
@@ -287,7 +278,7 @@ public BigInteger(String val, int radix) {
     int[] magnitude = new int[numWords];
 
     // Why groups?
-    // Because a BigInteger’s internal representation is an array of 32-bit words. They process the input string in chunks (each “group”) that fit in an int. BigInteger的mag字段是int[]类型,所以按int长度32个bit分组
+    // Because a BigInteger’s internal representation is an array of 32-bit words. They process the input string in chunks (each “group”) that fit in an int. 
     
     // Process first (potentially short) digit group
     // numDigits % digitsPerInt[radix] 余数即为剩余的最左侧部分
@@ -307,6 +298,7 @@ public BigInteger(String val, int radix) {
         groupVal = Integer.parseInt(group, radix);
         if (groupVal < 0)
             throw new NumberFormatException("Illegal digit");
+        // 每次新读取到一个字符,意味着前面少算了一个进位,需要乘以一个进位值后,再加新字符的值    
         destructiveMulAdd(magnitude, superRadix, groupVal);
     }
     // Required for cases where the array was overallocated.
@@ -440,49 +432,7 @@ n进制下,每个digit不一定是单个字符的,比如1024进制下,1021可以
 ```
 
 
-```text
-⚡ destructiveMulAdd
 
-类似我们做字符串转正整数时的进位操作
-
-destructiveMulAdd(magnitude, superRadix, groupVal);
-=> magnitude = magnitude * superRadix + groupVal
-
-
-private static void destructiveMulAdd(int[] x, int y, int z) {
-    long ylong = y & 0xffffffffL;
-    long zlong = z & 0xffffffffL;
-    long carry = 0;
-
-    for (int i = x.length - 1; i >= 0; i--) {
-        long product = (x[i] & 0xffffffffL) * ylong + carry;
-        x[i] = (int) product;
-        carry = product >>> 32;
-    }
-
-    // add z to the least significant word
-    long sum = (x[x.length - 1] & 0xffffffffL) + zlong;
-    x[x.length - 1] = (int) sum;
-    carry = sum >>> 32;
-
-    // propagate carry if necessary
-    for (int i = x.length - 2; carry != 0 && i >= 0; i--) {
-        long v = (x[i] & 0xffffffffL) + carry;
-        x[i] = (int) v;
-        carry = v >>> 32;
-    }
-}
-
-It modifies the magnitude array x in place, performing this arithmetic:
-x = x * y + z
-
-
-When parsing the string "123456789" in base 10
-we might read it as groups:
-["123", "456", "789"]
-and we process them sequentially:
-value = (((0 * 10³ + 123) * 10³ + 456) * 10³ + 789)
-```
 
 
 ```text
