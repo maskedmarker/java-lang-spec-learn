@@ -602,7 +602,7 @@ The expression (int) Math.round(Math.log(b * LOG_TWO / logCache[radix]) / LOG_TW
     等价于log radix(2^b) 这里直接通过BigInteger有多少bits来计算它的最大值,而非直接取abs()来获得准确值.可能是因为2^b计算模糊值的速度远大于准确值
     Lets name this intermediate result num_digits
 2. The second calculation is then (int) Math.round(Math.log(num_digits) / Math.log(2) - 1.0). 
-    Math.log(num_digits) / Math.log(2)等价于 log2 (num_digits)
+    Math.log(num_digits) / Math.log(2)等价于 log2 (num_digits),参见看powerCache[i]数组元素值
     For num_digits of 308.2547 this gives 7.  Therefore in our example the code will pick 10^(2^7) (which is 10^128) as divisor to split the original number.
     
 radix^(2^x)=2^b
