@@ -100,9 +100,9 @@ public class BigIntegerTest2 {
 
         for (int i = Character.MIN_RADIX; i <= Character.MAX_RADIX; i++) {
             digitsPerLong[i] = (int) (Math.log(Long.MAX_VALUE) / Math.log(i));
-            longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
-            if (longRadix[i] >= Long.MAX_VALUE) {
-                digitsPerLong[i] = digitsPerLong[i] - 1;
+            if (Math.pow(i, digitsPerLong[i]) >= Long.MAX_VALUE) {
+                System.out.println("Math.pow(i, digitsPerLong[i]) = " + Math.pow(i, digitsPerLong[i]));
+                digitsPerLong[i] -= 1;
                 longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
             }
             System.out.printf("%d进制下, 一组(long)容纳%d个digit, 组与组之间的进位倍数为 %x \n", i, digitsPerLong[i], longRadix[i]);
