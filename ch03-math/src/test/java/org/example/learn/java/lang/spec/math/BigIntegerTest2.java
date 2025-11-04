@@ -80,6 +80,10 @@ public class BigIntegerTest2 {
         }
     }
 
+    /**
+     * digitsPerInt 由于中间计算使用的是long,所以可以将int的32bit都利用起来,
+     * digitsPerLong 但是在计算long的64bit时,需要考虑最高位
+     */
     @Test
     public void test11() {
         // 因为取值时的用法是digitsPerInt[radix],所以数组digitsPerInt最大索引值为Character.MAX_RADIX,数组digitsPerInt的长度是Character.MAX_RADIX+1
@@ -89,6 +93,10 @@ public class BigIntegerTest2 {
         for (int i = Character.MIN_RADIX; i <= Character.MAX_RADIX; i++) {
             // logi(Long.MAX_VALUE)=log2(Long.MAX_VALUE)/log2(i)
             digitsPerLong[i] = (int) (Math.log(Long.MAX_VALUE) / Math.log(i));
+            if (Math.pow(i, digitsPerLong[i]) >= Long.MAX_VALUE) {
+                System.out.println("Math.pow(i, digitsPerLong[i]) = " + Math.pow(i, digitsPerLong[i]));
+                digitsPerLong[i] -= 1;
+            }
             System.out.printf("log%d(Long.MAX_VALUE)=%d \n", i, digitsPerLong[i]);
         }
     }
@@ -103,8 +111,8 @@ public class BigIntegerTest2 {
             if (Math.pow(i, digitsPerLong[i]) >= Long.MAX_VALUE) {
                 System.out.println("Math.pow(i, digitsPerLong[i]) = " + Math.pow(i, digitsPerLong[i]));
                 digitsPerLong[i] -= 1;
-                longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
             }
+            longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
             System.out.printf("%d进制下, 一组(long)容纳%d个digit, 组与组之间的进位倍数为 %x \n", i, digitsPerLong[i], longRadix[i]);
         }
     }
