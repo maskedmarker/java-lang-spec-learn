@@ -73,11 +73,45 @@ public class BigIntegerTest2 {
         final int[] digitsPerInt = new int[Character.MAX_RADIX + 1];
         final int[] intRadix = new int[digitsPerInt.length];
 
-        System.out.println("字符串使用不同的进制,在转换为BigInteger内部的2^32进制下,一个");
         for (int i = Character.MIN_RADIX; i <= Character.MAX_RADIX; i++) {
             digitsPerInt[i] = (int) (Math.log(Integer.MAX_VALUE) / Math.log(i));
             intRadix[i] = (int) Math.pow(i, digitsPerInt[i]);
             System.out.printf("%d进制下, 一组容纳%d个digit, 组与组之间的进位倍数为 %x \n", i, digitsPerInt[i], intRadix[i]);
         }
+    }
+
+    @Test
+    public void test11() {
+        // 因为取值时的用法是digitsPerInt[radix],所以数组digitsPerInt最大索引值为Character.MAX_RADIX,数组digitsPerInt的长度是Character.MAX_RADIX+1
+        final int[] digitsPerLong = new int[Character.MAX_RADIX + 1];
+
+        System.out.println("字符串使用不同的进制(假设为A进制),在转换为BigInteger内部的2^32进制下,一个long(即一个2^64进制的digit)最多容纳多少个A进制digit");
+        for (int i = Character.MIN_RADIX; i <= Character.MAX_RADIX; i++) {
+            // logi(Long.MAX_VALUE)=log2(Long.MAX_VALUE)/log2(i)
+            digitsPerLong[i] = (int) (Math.log(Long.MAX_VALUE) / Math.log(i));
+            System.out.printf("log%d(Long.MAX_VALUE)=%d \n", i, digitsPerLong[i]);
+        }
+    }
+
+    @Test
+    public void test12() {
+        final int[] digitsPerLong = new int[Character.MAX_RADIX + 1];
+        final long[] longRadix = new long[digitsPerLong.length];
+
+        for (int i = Character.MIN_RADIX; i <= Character.MAX_RADIX; i++) {
+            digitsPerLong[i] = (int) (Math.log(Long.MAX_VALUE) / Math.log(i));
+            longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
+            if (longRadix[i] >= Long.MAX_VALUE) {
+                digitsPerLong[i] = digitsPerLong[i] - 1;
+                longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
+            }
+            System.out.printf("%d进制下, 一组(long)容纳%d个digit, 组与组之间的进位倍数为 %x \n", i, digitsPerLong[i], longRadix[i]);
+        }
+    }
+
+    @Test
+    public void test21() {
+        BigInteger bigInteger = new BigInteger("de0b6b3a7640000", 16);
+        System.out.println("bigInteger.toString(10) = " + bigInteger.toString(10));
     }
 }
