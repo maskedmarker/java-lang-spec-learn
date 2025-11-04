@@ -445,3 +445,220 @@ n进制下,每个digit不一定是单个字符的,比如1024进制下,1021可以
 由于底层数组是final的，仅仅想改改符号位也是不可能的，必须要深拷贝一份, 如果有了signum存放符号, 求个相反数只需要求反个signum, 拷贝mag只需浅拷贝。
 有了signum使判断是否为0十分方便。
 ```
+
+```text
+toString()
+
+
+Example
+
+Let’s take BigInteger("1234567890123456789") in base 10.
+longRadix[10] = 10^9
+
+Divide repeatedly:
+
+Iteration	Quotient (q2)	Remainder (r2)	  Stored group
+#1	         1234567890	     123456789	       "123456789"
+#2	         1	             234567890	       "234567890"
+#3	         0	             1	               "1"
+
+Reassemble groups (reverse order):
+"1" + "234567890" + "123456789" → "1234567890123456789"
+```
+
+```text
+smallToString(int radix)
+通过不断地取余数,来获取radix进制下的字符串
+
+
+
+
+private String smallToString(int radix) {
+    if (signum == 0) {
+        return "0";
+    }
+
+    // Compute upper bound on number of digit groups and allocate space
+    // 等价于ceil((4*mag.length)/7),每个int占4字节,所以乘以4.7字节一组是一个经验值
+    int maxNumDigitGroups = (4*mag.length + 6)/7;
+    String digitGroup[] = new String[maxNumDigitGroups];
+
+    // Translate number to string, a digit group at a time
+    BigInteger tmp = this.abs();
+    // 注意numGroups是从0递增的
+    int numGroups = 0;
+    while (tmp.signum != 0) {
+        // radix进制下,约定的进位值
+        BigInteger d = longRadix[radix];
+
+        MutableBigInteger q = new MutableBigInteger(),
+                          a = new MutableBigInteger(tmp.mag),
+                          b = new MutableBigInteger(d.mag);
+        // 通过不断地取余数来获取真个BigInteger的radix进制下的字符串
+        MutableBigInteger r = a.divide(b, q);
+        BigInteger q2 = q.toBigInteger(tmp.signum * d.signum); // 商
+        BigInteger r2 = r.toBigInteger(tmp.signum * d.signum); // 余数
+        // 余数是十进制的值,需要转换成对应进制的字符串
+        digitGroup[numGroups++] = Long.toString(r2.longValue(), radix);
+        tmp = q2;
+    }
+
+    // Put sign (if any) and first digit group into result buffer
+    StringBuilder buf = new StringBuilder(numGroups*digitsPerLong[radix]+1);
+    if (signum < 0) {
+        buf.append('-');
+    }
+    buf.append(digitGroup[numGroups-1]); // numGroups是从0递增的,所以digitGroup[numGroups-1]是最高位的一组
+
+    // Append remaining digit groups padded with leading zeros
+    for (int i=numGroups-2; i >= 0; i--) {
+        // Prepend (any) leading zeros for this digit group
+        int numLeadingZeros = digitsPerLong[radix]-digitGroup[i].length();
+        if (numLeadingZeros != 0) {
+            buf.append(zeros[numLeadingZeros]); // 补零
+        }
+        buf.append(digitGroup[i]);
+    }
+    return buf.toString();
+}
+
+为什么用 “每 7 字节 一个组,而不是 8/6/4？
+
+longRadix[radix] 是预计算的 radix^k，要求它能放进 long（Java 的 64-bit signed long）。为了保证实现中用 MutableBigInteger 做除法时的内部长度关系与边界处理简单、安全，作者选择了一个 保守的字节上限（实现中常见的是 7 字节上界的经验值），用来推导数组容量。
+这样的上界不是一个精确推导出的等式，而是工程上的保守估计（足够小以避免大量浪费，又足够大保证不会越界）。用 7 字节能兼顾不同进制下 longRadix 的大小而不用针对每种进制单独计算容量。
+
+（注：这不是数学上的必然真理，而是 OpenJDK 实现里的经验性/工程性选择 —— 其目的是避免在最常见和最坏情况下频繁扩容，同时保持实现简单高效。）
+```
+
+```text
+
+
+public String toString(int radix) {
+    if (signum == 0)
+        return "0";
+    if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX)
+        radix = 10;
+
+    // If it's small enough, use smallToString.
+    if (mag.length <= SCHOENHAGE_BASE_CONVERSION_THRESHOLD)
+       return smallToString(radix);
+
+    // Otherwise use recursive toString, which requires positive arguments.
+    // The results will be concatenated into this StringBuilder
+    StringBuilder sb = new StringBuilder();
+    if (signum < 0) {
+        toString(this.negate(), sb, radix, 0);
+        sb.insert(0, '-');
+    }
+    else
+        toString(this, sb, radix, 0);
+
+    return sb.toString();
+}
+
+
+
+private static void toString(BigInteger u, StringBuilder sb, int radix, int digits) {
+    /* If we're smaller than a certain threshold, use the smallToString method, padding with leading zeroes when necessary. */
+    if (u.mag.length <= SCHOENHAGE_BASE_CONVERSION_THRESHOLD) {
+        String s = u.smallToString(radix);
+
+        // Pad with internal zeros if necessary.
+        // Don't pad if we're at the beginning of the string.
+        if ((s.length() < digits) && (sb.length() > 0)) {
+            for (int i=s.length(); i < digits; i++) {
+                sb.append('0');
+            }
+        }
+
+        sb.append(s);
+        return;
+    }
+
+    int b, n;
+    b = u.bitLength();
+
+    // Calculate a value for n in the equation radix^(2^n) = u and subtract 1 from that value.  This is used to find the cache index that contains the best value to divide u.
+    n = (int) Math.round(Math.log(b * LOG_TWO / logCache[radix]) / LOG_TWO - 1.0);
+    BigInteger v = getRadixConversionCache(radix, n);
+    BigInteger[] results;
+    results = u.divideAndRemainder(v);
+
+    int expectedDigits = 1 << n;
+
+    // Now recursively build the two halves of each number.
+    toString(results[0], sb, radix, digits-expectedDigits);
+    toString(results[1], sb, radix, expectedDigits);
+}
+
+
+n = (int) Math.round(Math.log(b * LOG_TWO / logCache[radix]) / LOG_TWO - 1.0);
+The purpose is to find a BigInteger v that has the form radix^x that divides the BigInteger u into two parts that have a string representation of roughly the same length. 
+The "perfect" value for that would probably be 10^x where u.sqrt() is between 0.5 * 10^x and 5 * 10^x (for radix 10). 
+Instead the code approximates that "perfect" value by using a value from the sequence radix^1, radix^2, radix^4 because these radix^(2^x) values are easy to calculate and still give good enough results.
+
+The expression (int) Math.round(Math.log(b * LOG_TWO / logCache[radix]) / LOG_TWO - 1.0) is two calculations wrapped into one expression:
+1. b * LOG_TWO / logCache[radix] calculates the approximate number of digits to represent the BigInteger value as string in radix radix  
+    等价于log radix(2^b) 这里直接通过BigInteger有多少bits来计算它的最大值,而非直接取abs()来获得准确值.可能是因为2^b计算模糊值的速度远大于准确值
+    Lets name this intermediate result num_digits
+2. The second calculation is then (int) Math.round(Math.log(num_digits) / Math.log(2) - 1.0). 
+    Math.log(num_digits) / Math.log(2)等价于 log2 (num_digits)
+    For num_digits of 308.2547 this gives 7.  Therefore in our example the code will pick 10^(2^7) (which is 10^128) as divisor to split the original number.
+    
+radix^(2^x)=2^b
+2^x = log radix (2^b)
+x = log2 (log radix (2^b))    
+
+
+Using Math.floor() doesn't work for all cases (i.e. requires additional logic to detect those cases and then needs to do additional work). IMHO this observation is enough to reject that approach.
+参见 https://stackoverflow.com/questions/73740708/question-about-javas-bigintegers-tostring
+```
+
+```text
+powerCache[i]数组中存储的是{i, i^2, i^4, i^8, i^16, i^32, i^64, ..., i^(2^n)}
+
+
+private static volatile BigInteger[][] powerCache;
+static {
+
+        /*
+         * Initialize the cache of radix^(2^x) values used for base conversion
+         * with just the very first value.  Additional values will be created
+         * on demand.
+         */
+        powerCache = new BigInteger[Character.MAX_RADIX+1][];
+        for (int i=Character.MIN_RADIX; i <= Character.MAX_RADIX; i++) {
+            powerCache[i] = new BigInteger[] { BigInteger.valueOf(i) };
+        }
+    }
+    
+private static BigInteger getRadixConversionCache(int radix, int exponent) {
+    BigInteger[] cacheLine = powerCache[radix]; // volatile read
+    if (exponent < cacheLine.length) {
+        return cacheLine[exponent];
+    }
+
+    int oldLength = cacheLine.length;
+    cacheLine = Arrays.copyOf(cacheLine, exponent + 1);
+    for (int i = oldLength; i <= exponent; i++) {
+        cacheLine[i] = cacheLine[i - 1].pow(2); // cacheLine = radix radix^(2^1) radix^(2^2) radix^(2^3)      (r^a)^b=r^(a*b)
+    }
+
+    BigInteger[][] pc = powerCache; // volatile read again
+    if (exponent >= pc[radix].length) {
+        pc = pc.clone();
+        pc[radix] = cacheLine;
+        powerCache = pc; // volatile write, publish
+    }
+    return cacheLine[exponent];
+}
+
+初始:    
+powerCache[radix]的值为{radix}    
+之后数组开始扩展
+{radix, radix^2==radix^(2^1)} 
+{radix, radix^2 (radix^2)^2=radix^4=radix^(2^2)} 
+{radix, radix^2 (radix^2)^2=radix^(2^2)  (radix^4)^2=radix^8=radix^(2^3)} 
+{radix, radix^2 (radix^2)^2=radix^(2^2)  (radix^4)^2=radix^8=radix^(2^3)  (radix^8)^2=radix^16=radix^(2^4)} 
+...
+```

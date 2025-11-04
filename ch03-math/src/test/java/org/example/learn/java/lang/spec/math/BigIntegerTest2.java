@@ -80,10 +80,6 @@ public class BigIntegerTest2 {
         }
     }
 
-    /**
-     * digitsPerInt 由于中间计算使用的是long,所以可以将int的32bit都利用起来,
-     * digitsPerLong 但是在计算long的64bit时,需要考虑最高位
-     */
     @Test
     public void test11() {
         // 因为取值时的用法是digitsPerInt[radix],所以数组digitsPerInt最大索引值为Character.MAX_RADIX,数组digitsPerInt的长度是Character.MAX_RADIX+1
