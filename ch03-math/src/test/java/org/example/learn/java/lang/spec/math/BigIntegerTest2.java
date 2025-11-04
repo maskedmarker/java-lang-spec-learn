@@ -113,7 +113,7 @@ public class BigIntegerTest2 {
                 digitsPerLong[i] -= 1;
             }
             longRadix[i] = (long) Math.pow(i, digitsPerLong[i]);
-            System.out.printf("%d进制下, 一组(long)容纳%d个digit, 组与组之间的进位倍数为 %x \n", i, digitsPerLong[i], longRadix[i]);
+            System.out.printf("%d进制下, 一组(long)容纳%d个digit, 组与组之间的进位倍数为 %x  %d\n", i, digitsPerLong[i], longRadix[i], longRadix[i]);
         }
     }
 
