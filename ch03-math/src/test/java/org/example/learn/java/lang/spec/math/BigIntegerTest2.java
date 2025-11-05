@@ -118,4 +118,20 @@ public class BigIntegerTest2 {
         BigInteger bigInteger = new BigInteger("de0b6b3a7640000", 16);
         System.out.println("bigInteger.toString(10) = " + bigInteger.toString(10));
     }
+
+    @Test
+    public void test22() {
+        BigInteger bigInteger = new BigInteger("fffffffffff", 16);
+        System.out.println("bigInteger = " + bigInteger);
+        System.out.println("bigInteger.intValue() = " + bigInteger.intValue());
+        System.out.println("Integer.toHexString(bigInteger.intValue()) = " + Integer.toHexString(bigInteger.intValue()));
+        System.out.println("Integer.toBinaryString(bigInteger.intValue()) = " + Integer.toBinaryString(bigInteger.intValue()));
+        Assert.assertTrue("与原生的long cast to int相同,仅保留的低32-bit按补码处理,最高位是1的就是负数", bigInteger.intValue() < 0);
+
+        long l = 0xfffffffffffL;
+        int i = (int) l;
+        System.out.println("l = " + l);
+        System.out.println("i = " + i);
+        Assert.assertTrue("保留的低32-bit按补码处理,最高位是1的就是负数", i < 0);
+    }
 }
