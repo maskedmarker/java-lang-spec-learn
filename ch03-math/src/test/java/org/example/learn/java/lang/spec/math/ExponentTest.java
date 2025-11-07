@@ -29,7 +29,7 @@ public class ExponentTest {
         // base是2
         float c = 0x1.23p5F;// (1+2*16^-1+3*16^-2)*(2^5)
         System.out.println("c = " + c);
-        double d = 0x1.23P6; // 1.2*(2^6)
+        double d = 0x1.23P6; // (1+2*16^-1+3*16^-2)*(2^6)
         System.out.println("d = " + d);
         double e = 0x1.4P10; // (1+4*16^-1)*(2^10)
         System.out.println("e = " + e);
