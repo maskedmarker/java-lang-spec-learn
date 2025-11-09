@@ -13,7 +13,7 @@ CLH队列: 一个双向队列,用于存储等待线程
         低开销：仅需少量原子变量维护队列.
 
 2. 两种资源共享方式
-独占模式(Exclusive): 一次只有一个线程能执行,如ReentrantLock
+独占模式(Exclusive): 只有一个线程能执行,如ReentrantLock
 共享模式(Share): 多个线程可同时执行,如Semaphore/CountDownLatch
 ```
 
@@ -291,3 +291,45 @@ return h != t &&
     false：当前线程就是 head.next 的持有者（可尝试获取锁）       
 ```
 
+### release
+
+release相关的方法有2个,即对应独占模式和共享模式
+```text
+tryRelease(int)	        尝试释放独占锁	    ✔️（独占模式）
+tryReleaseShared(int)	尝试释放共享锁	    ✔️（共享模式）
+```
+
+```text
+java.util.concurrent.locks.ReentrantLock.Sync.tryRelease的实现
+protected final boolean tryRelease(int releases) {
+    int c = getState() - releases;
+    if (Thread.currentThread() != getExclusiveOwnerThread())
+        throw new IllegalMonitorStateException();
+    boolean free = false;
+    if (c == 0) {
+        free = true;
+        setExclusiveOwnerThread(null);
+    }
+    // 这里没有使用CAS来设置state,因为tryRelease方法是独占模式的方法,即该方法同一时刻只有一个线程在执行.
+    setState(c);
+    return free;
+}
+
+-------------------------------------------------------------------
+
+java.util.concurrent.Semaphore.Sync.tryReleaseShared的实现
+
+protected final boolean tryReleaseShared(int releases) {
+    for (;;) {
+        int current = getState();
+        int next = current + releases;
+        if (next < current) // overflow
+            throw new Error("Maximum permit count exceeded");
+        // 这里使用CAS来设置state,因为tryReleaseShared方法是共享模式的方法,即该方法同一时刻会有多个线程在执行.
+        if (compareAndSetState(current, next))
+            return true;
+    }
+}
+
+
+```
