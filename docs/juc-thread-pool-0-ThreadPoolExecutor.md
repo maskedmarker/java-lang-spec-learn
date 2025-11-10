@@ -189,7 +189,7 @@ private boolean addWorker(Runnable firstTask, boolean core) {
         if (t != null) {
             final ReentrantLock mainLock = this.mainLock;
             // 对于修改workers,必须使用mainLock.(shutdown的执行涉及到修改workers也要mainLock,所以addWorker和shutdown不会并发执行)
-            // 由于线程池的状态变化由shutdown引起,由于mainLock的存在导致在addWorker时无法执行shutdown,也就在这里锁定了线程池的状态
+            // 由于线程池的状态变化由shutdown引起,由于mainLock的存在导致在addWorker时无法执行shutdown和execute,也就在这里锁定了线程池的状态
             mainLock.lock();
             try {
                 // 再次检查线程池状态,防止从CAS更新workerCount的值到现在这段时间发生了shutdown
