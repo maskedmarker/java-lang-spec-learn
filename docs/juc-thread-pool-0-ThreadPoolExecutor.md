@@ -489,7 +489,19 @@ public List<Runnable> shutdownNow() {
 
 ````text
 因为单个Worker对象只会被一个线程执行,所以Worker只需要实现AbstractQueuedSynchronizer的独占模式的抽象方法
-private final class Worker extends AbstractQueuedSynchronizer implements Runnable {   
+
+private final class Worker extends AbstractQueuedSynchronizer implements Runnable {
+    final Thread thread;
+    Runnable firstTask;
+    // 统计该线程已经完成的任务数
+    volatile long completedTasks;
+    
+    Worker(Runnable firstTask) {
+        setState(-1); // inhibit interrupts until runWorker (state的初始值为-1, tryAcquire会一直失败, 除非先调用unlock()触发tryRelease才能将state设置为0)
+        this.firstTask = firstTask;
+        this.thread = getThreadFactory().newThread(this);
+    }
+    
     public void run() {
         // 线程池start工作线程后,新的工作线程会调用Worker.run方法,继而执行ThreadPoolExecutor.runWorker(worker)方法,同一个线程池中的各个工作线程的不同点是Worker对象,所以runWorker的入参需要Worker对象.
         runWorker(this);
@@ -497,7 +509,7 @@ private final class Worker extends AbstractQueuedSynchronizer implements Runnabl
     
     // 实现独占模式的tryAcquire方法,无需实现tryAcquireShared方法
     protected boolean tryAcquire(int unused) {
-        // 通过CAS修改state来实现原子性
+        // 通过CAS修改state来实现原子性(state的初始值为-1,这里CAS不会成功)
         if (compareAndSetState(0, 1)) {
             setExclusiveOwnerThread(Thread.currentThread());
             return true;
@@ -511,6 +523,13 @@ private final class Worker extends AbstractQueuedSynchronizer implements Runnabl
         // 因为是独占模式,当前方法不会并发执行,所以连CAS都省了
         setState(0);
         return true;
+    }
+    
+    public void lock()        { acquire(1); }
+    public boolean tryLock()  { return tryAcquire(1); }
+    public void unlock()      { release(1); }
+    protected boolean isHeldExclusively() {
+        return getState() != 0;
     }
 }
 ````
