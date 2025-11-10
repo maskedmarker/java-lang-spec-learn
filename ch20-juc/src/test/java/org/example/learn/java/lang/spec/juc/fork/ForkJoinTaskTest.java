@@ -22,7 +22,7 @@ public class ForkJoinTaskTest {
 
             Fibonacci f1 = new Fibonacci(n - 1);
             // asynchronously execute this task in the pool the current task is running in, if applicable, or using the ForkJoinPool.commonPool() if not inForkJoinPool.
-            f1.fork(); // 异步执行子任务
+            f1.fork(); // 其他线程异步执行f1子任务
             Fibonacci f2 = new Fibonacci(n - 2);
             return f2.compute() + f1.join(); // 等待第一个子任务完成并获取结果
         }

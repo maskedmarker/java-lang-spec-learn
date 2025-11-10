@@ -12,10 +12,10 @@ public interface Future<V> {
     // 任务是否已取消
     boolean isCancelled();
 
-    // 任务是否已完成（正常完成、异常或取消）
+    // 任务是否已完成(正常完成/异常) 计算包含正常和计算中抛出异常. 
     boolean isDone();
 
-    // 阻塞获取结果（会抛出 InterruptedException, ExecutionException）
+    // 阻塞获取结果（会抛出 当前线程被中断,本线程抛出InterruptedException, 计算过程抛出的ExecutionException）
     V get() throws InterruptedException, ExecutionException;
 
     // 带超时的阻塞获取结果
