@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 
 public class ThreadStatusTest {
 
@@ -133,5 +134,108 @@ public class ThreadStatusTest {
 
         System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
         Assert.assertTrue("线程在进行I/O操作时,其状态为runnable", Thread.State.RUNNABLE.equals(workerThread.getState()));
+    }
+
+    @Test
+    public void test3() {
+        final Object lock = new Object();
+
+        Thread workerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (lock) {
+                    System.out.printf("thread[%s] 主动放弃monitor,wait 10s \n", Thread.currentThread().getName());
+                    try {
+                        lock.wait(10 * 1000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }, "worker-thread");
+        workerThread.start();
+
+        // 等待1秒
+        long start = System.currentTimeMillis();
+        long end = start + 1000;
+        while (System.currentTimeMillis() < end) {
+            Thread.yield();
+        }
+
+        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        Assert.assertEquals("wait(timeout)的线程的状态应该为TIMED_WAITING", Thread.State.TIMED_WAITING, workerThread.getState());
+    }
+
+    @Test
+    public void test4() {
+        final Object lock = new Object();
+
+        Thread workerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (lock) {
+                    System.out.printf("thread[%s] 主动放弃monitor,wait无穷时间 \n", Thread.currentThread().getName());
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        }, "worker-thread");
+        workerThread.start();
+
+        // 等待1秒
+        long start = System.currentTimeMillis();
+        long end = start + 1000;
+        while (System.currentTimeMillis() < end) {
+            Thread.yield();
+        }
+
+        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        Assert.assertEquals("wait()的线程的状态应该为WAITING", Thread.State.TIMED_WAITING, workerThread.getState());
+    }
+
+    @Test
+    public void test5() {
+        Thread workerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                // park挂起10秒
+                LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(10));
+            }
+        }, "worker-thread");
+        workerThread.start();
+
+        // 等待1秒
+        long start = System.currentTimeMillis();
+        long end = start + 1000;
+        while (System.currentTimeMillis() < end) {
+            Thread.yield();
+        }
+
+        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        Assert.assertEquals("被park的线程的状态应该为TIMED_WAITING, 状态与wait(timeout)相同", Thread.State.TIMED_WAITING, workerThread.getState());
+    }
+
+    @Test
+    public void test6() {
+        Thread workerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                LockSupport.park();
+            }
+        }, "worker-thread");
+        workerThread.start();
+
+        // 等待1秒
+        long start = System.currentTimeMillis();
+        long end = start + 1000;
+        while (System.currentTimeMillis() < end) {
+            Thread.yield();
+        }
+
+        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        Assert.assertEquals("被park的线程的状态应该为WAITING, 状态与wait()相同", Thread.State.WAITING, workerThread.getState());
     }
 }
