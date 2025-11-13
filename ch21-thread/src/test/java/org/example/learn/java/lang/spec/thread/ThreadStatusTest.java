@@ -1,5 +1,7 @@
 package org.example.learn.java.lang.spec.thread;
 
+import org.example.learn.java.lang.spec.thread.util.LogUtils;
+import org.example.learn.java.lang.spec.thread.util.ThreadUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -14,22 +16,25 @@ public class ThreadStatusTest {
      */
     @Test
     public void test0() throws InterruptedException {
-        Thread workerThread = new Thread("worker-thread");
-        System.out.printf("创建线程thread[%s],并未start该thread\n", workerThread.getName());
-        System.out.println("workerThreadState = " + workerThread.getState());
-        Assert.assertTrue("thread刚创建且并未start前,状态为new", Thread.State.NEW.equals(workerThread.getState()));
+        Thread workerThread = new Thread(() -> {
+            ThreadUtils.yieldWait(3, TimeUnit.SECONDS); // 防止过快结束
+        },"worker-thread");
+
+        LogUtils.log("创建线程thread[%s],并未start该thread", workerThread.getName());
+        LogUtils.log("workerThreadState = " + workerThread.getState());
+        Assert.assertEquals("thread刚创建且并未start前,状态为new", Thread.State.NEW, workerThread.getState());
 
         workerThread.start();
-        System.out.printf("start该thread[%s]\n", workerThread.getName());
-        System.out.println("workerThreadState = " + workerThread.getState());
-        Assert.assertTrue("thread在start后,状态为runnable", Thread.State.RUNNABLE.equals(workerThread.getState()));
+        LogUtils.log("start该thread[%s]", workerThread.getName());
+        LogUtils.log("workerThreadState = " + workerThread.getState());
+        Assert.assertEquals("thread在start后,状态为runnable", Thread.State.RUNNABLE, workerThread.getState());
 
         // 等待workerThread结束
         while (workerThread.isAlive()) {
             Thread.yield();
         }
 
-        System.out.println("workerThreadState = " + workerThread.getState());
+        LogUtils.log("workerThread结束后, workerThreadState = " + workerThread.getState());
         Assert.assertTrue("thread结束后,状态为terminated", Thread.State.TERMINATED.equals(workerThread.getState()));
     }
 
@@ -39,62 +44,26 @@ public class ThreadStatusTest {
     @Test
     public void test1() throws InterruptedException {
         final Object lock = new Object();
-        final AtomicBoolean hasGotLock = new AtomicBoolean(false);
-        final AtomicBoolean readyToReleaseLock = new AtomicBoolean(false);
 
-        Thread holdingLockThread = new Thread("worker-thread-1"){
-            @Override
-            public void run() {
-                try {
-                    // worker-thread-1通过判断hasGotLock从而避免因为获取monitor而被阻塞
-                    while (hasGotLock.get()) {
-                        Thread.yield();
-                    }
+        Thread workerThread;
+        synchronized (lock) {
+            LogUtils.log("thread has got synchronized lock");
 
-                    System.out.printf("thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
-                    synchronized (lock) {
-                        System.out.printf("thread[%s] has got synchronized lock \n", Thread.currentThread().getName());
-                        hasGotLock.set(true);
-
-                        // 等待通知,然后跳出synchronized块
-                        while (!readyToReleaseLock.get()) {
-                            Thread.yield();
-                        }
-                    }
-
-                    System.out.printf("thread[%s] is at the end of running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        };
-
-        Thread acquiringLockThread = new Thread("worker-thread-2") {
-            @Override
-            public void run() {
-                // worker-thread-2通过判断hasGotLock从而故意因为获取monitor而被阻塞
-                while (!hasGotLock.get()) {
-                    Thread.yield();
-                }
-
-                System.out.printf("before acquiring monitor, thread[%s] is running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+            workerThread = new Thread(() -> {
+                LogUtils.log("before acquiring monitor, thread[%s] is running | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
                 synchronized (lock) {
-                    System.out.printf("thread[%s] has got synchronized lock  | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                    LogUtils.log("thread[%s] has got synchronized lock  | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
                 }
 
-                System.out.printf("thread[%s] is at the end of running | isInterrupted=%s\n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
-            }
-        };
+                LogUtils.log("thread[%s] is at the end of running | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+            }, "worker-thread");
+            workerThread.start();
 
 
-        // 因为有hasGotLock变量控制,所以worker-thread-1先获取到monitor,然后worker-thread-2再去获取monitor.worker-thread-2再去获取monitor会被阻塞
-        holdingLockThread.start();
-        acquiringLockThread.start();
-
-        // 等待一会再观测线程状态
-        TimeUnit.SECONDS.sleep(3);
-        System.out.println("holdingLockThread status = " + holdingLockThread.getState());
-        System.out.println("acquiringLockThread status = " + acquiringLockThread.getState());
+            ThreadUtils.yieldWait(5, TimeUnit.SECONDS);
+            LogUtils.log("workerThread status = " + workerThread.getState());
+            Assert.assertEquals("在当前线程释放锁之前,worker-thread被monitorenter阻塞", Thread.State.BLOCKED, workerThread.getState());
+        }
     }
 
 
@@ -117,9 +86,9 @@ public class ThreadStatusTest {
             @Override
             public void run() {
                 try {
-                    System.out.printf("thread[%s] is ready to read from std\n", Thread.currentThread().getName());
+                    LogUtils.log("thread[%s] is ready to read from std", Thread.currentThread().getName());
                     System.in.read();
-                    System.out.printf("thread[%s] is at the end of running\n", Thread.currentThread().getName());
+                    LogUtils.log("thread[%s] is at the end of running", Thread.currentThread().getName());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -130,10 +99,9 @@ public class ThreadStatusTest {
         while (Thread.State.NEW.equals(workerThread.getState())) {
             Thread.yield();
         }
-        TimeUnit.SECONDS.sleep(5);
-
-        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
-        Assert.assertTrue("线程在进行I/O操作时,其状态为runnable", Thread.State.RUNNABLE.equals(workerThread.getState()));
+        ThreadUtils.yieldWait(5, TimeUnit.SECONDS);
+        LogUtils.log("thread[%s] status is %s", workerThread.getName(), workerThread.getState());
+        Assert.assertEquals("线程在进行I/O操作时,其状态为runnable", Thread.State.RUNNABLE, workerThread.getState());
     }
 
     @Test
@@ -144,7 +112,7 @@ public class ThreadStatusTest {
             @Override
             public void run() {
                 synchronized (lock) {
-                    System.out.printf("thread[%s] 主动放弃monitor,wait 10s \n", Thread.currentThread().getName());
+                    LogUtils.log("thread[%s] 主动放弃monitor,wait 10s ", Thread.currentThread().getName());
                     try {
                         lock.wait(10 * 1000);
                     } catch (InterruptedException e) {
@@ -156,13 +124,9 @@ public class ThreadStatusTest {
         workerThread.start();
 
         // 等待1秒
-        long start = System.currentTimeMillis();
-        long end = start + 1000;
-        while (System.currentTimeMillis() < end) {
-            Thread.yield();
-        }
+        ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
 
-        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        LogUtils.log("thread[%s] status is %s", workerThread.getName(), workerThread.getState());
         Assert.assertEquals("wait(timeout)的线程的状态应该为TIMED_WAITING", Thread.State.TIMED_WAITING, workerThread.getState());
     }
 
@@ -174,7 +138,7 @@ public class ThreadStatusTest {
             @Override
             public void run() {
                 synchronized (lock) {
-                    System.out.printf("thread[%s] 主动放弃monitor,wait无穷时间 \n", Thread.currentThread().getName());
+                    LogUtils.log("thread[%s] 主动放弃monitor,wait无穷时间 ", Thread.currentThread().getName());
                     try {
                         lock.wait();
                     } catch (InterruptedException e) {
@@ -186,14 +150,10 @@ public class ThreadStatusTest {
         workerThread.start();
 
         // 等待1秒
-        long start = System.currentTimeMillis();
-        long end = start + 1000;
-        while (System.currentTimeMillis() < end) {
-            Thread.yield();
-        }
+        ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
 
-        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
-        Assert.assertEquals("wait()的线程的状态应该为WAITING", Thread.State.TIMED_WAITING, workerThread.getState());
+        LogUtils.log("thread[%s] status is %s", workerThread.getName(), workerThread.getState());
+        Assert.assertEquals("wait()的线程的状态应该为WAITING", Thread.State.WAITING, workerThread.getState());
     }
 
     @Test
@@ -208,13 +168,9 @@ public class ThreadStatusTest {
         workerThread.start();
 
         // 等待1秒
-        long start = System.currentTimeMillis();
-        long end = start + 1000;
-        while (System.currentTimeMillis() < end) {
-            Thread.yield();
-        }
+        ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
 
-        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        LogUtils.log("thread[%s] status is %s", workerThread.getName(), workerThread.getState());
         Assert.assertEquals("被park的线程的状态应该为TIMED_WAITING, 状态与wait(timeout)相同", Thread.State.TIMED_WAITING, workerThread.getState());
     }
 
@@ -229,13 +185,9 @@ public class ThreadStatusTest {
         workerThread.start();
 
         // 等待1秒
-        long start = System.currentTimeMillis();
-        long end = start + 1000;
-        while (System.currentTimeMillis() < end) {
-            Thread.yield();
-        }
+        ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
 
-        System.out.printf("thread[%s] status is %s\n", workerThread.getName(), workerThread.getState());
+        LogUtils.log("thread[%s] status is %s", workerThread.getName(), workerThread.getState());
         Assert.assertEquals("被park的线程的状态应该为WAITING, 状态与wait()相同", Thread.State.WAITING, workerThread.getState());
     }
 }
