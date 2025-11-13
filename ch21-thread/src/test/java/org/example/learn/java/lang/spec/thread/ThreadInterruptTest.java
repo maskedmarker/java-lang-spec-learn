@@ -3,8 +3,10 @@ package org.example.learn.java.lang.spec.thread;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Calendar;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * 注意区分
@@ -220,5 +222,23 @@ public class ThreadInterruptTest {
         // 等待其他线程结束后,再结束测试方法,这样可以防止junit提前结束所有线程
         holdingLockThread.join();
         acquiringLockThread.join();
+    }
+
+    /**
+     * park()会因为interrupt而提前结束
+     * 且park()不会自动清除中断标志
+     */
+    @Test
+    public void test31() {
+        // 先中断自己
+        Thread.currentThread().interrupt();
+        long start = System.currentTimeMillis();
+        // 再park
+        System.out.printf("开始park thread[%s] (isInterrupted=%s) at %s \n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted(), Calendar.getInstance().getTime());
+        Assert.assertTrue(Thread.currentThread().isInterrupted());
+        LockSupport.park(); //应该无限期挂起而无法执行下面的方法
+        System.out.printf("结束park thread[%s] (isInterrupted=%s) at %s \n", Thread.currentThread().getName(), Thread.currentThread().isInterrupted(), Calendar.getInstance().getTime());
+        Assert.assertTrue("在park()前或者中,中断当前线程,会导致park直接退出", ((System.currentTimeMillis() - start) < TimeUnit.MILLISECONDS.toMillis(100)));
+        Assert.assertTrue("park()不会自动清除中断标志", Thread.currentThread().isInterrupted());
     }
 }
