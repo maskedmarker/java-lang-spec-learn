@@ -1,5 +1,6 @@
 package org.example.learn.java.lang.spec.thread;
 
+import org.example.learn.java.lang.spec.thread.util.ThreadUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -14,6 +15,9 @@ import java.util.concurrent.locks.LockSupport;
  * interrupted()是类方法,判断的是当前线程
  *
  * 线程在alive状态下,isInterrupted()才会返回正确的中断状态.当线程结束后,该实例方法返回的永远是false
+ * interrupt会打断sleep导致的线程阻塞,线程提前解除阻塞并抛出异常,同时清除中断标识
+ * interrupt会打断park导致的线程挂起,线程提前恢复调度
+ * interrupt不会打断monitorenter指令导致的线程阻塞
  */
 public class ThreadInterruptTest {
 
@@ -124,7 +128,7 @@ public class ThreadInterruptTest {
     /**
      * interrupt线程,并不会影响获取synchronized的monitor
      */
-    @Test
+    @Test(timeout = 5 * 1000)
     public void test21() throws InterruptedException {
         final Object lock = new Object();
 
@@ -135,16 +139,21 @@ public class ThreadInterruptTest {
                     Thread.currentThread().interrupt();
 
                     synchronized (lock) {
-                        System.out.println("中断线程,并不会影响获取synchronized monitor");
+                        System.out.printf("中断线程thread[%s],并不会影响其获取synchronized monitor at %s \n", Thread.currentThread().getName(), Calendar.getInstance().getTime());
+                        ThreadUtils.yieldWait(2, TimeUnit.SECONDS);
                     }
+                    System.out.printf("thread[%s]结束 at %s\n", Thread.currentThread().getName(), Calendar.getInstance().getTime());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         };
         workerThread.start();
-
+        System.out.printf("thread[%s] begins to join thread[%s] at %s \n", Thread.currentThread().getName(), workerThread.getName(), Calendar.getInstance().getTime());
+        long start = System.currentTimeMillis();
         workerThread.join();
+        System.out.printf("thread[%s] complete to join thread[%s] at %s \n", Thread.currentThread().getName(), workerThread.getName(), Calendar.getInstance().getTime());
+        Assert.assertTrue("interrupt不会打断monitorenter指令导致的线程阻塞", ((System.currentTimeMillis() - start) >= TimeUnit.SECONDS.toMillis(2)));
     }
 
     /**
