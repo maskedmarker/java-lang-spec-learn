@@ -241,7 +241,9 @@ public class ThreadInterruptTest {
 
     /**
      * 注意: interrupt是用来停止线程阻塞状态的
-     * thread在wait前被interrupt,调用wait会抛出中断异常(在调用wait时,线程是已经持有锁的)
+     * thread在wait前被interrupt,当调用wait时,
+     *                                     (此时线程是已经持有锁的),先检查中断情况,如果被中断,则直接抛出异常(此时线程并没有释放锁和挂起)
+     *
      */
     @Test
     public void test241() throws InterruptedException {
@@ -276,7 +278,8 @@ public class ThreadInterruptTest {
                 lock.wait();
             } catch (Exception e) {
                 Assert.assertTrue("线程是已经持有锁且已经被中断,在调用wait时直接抛出中断异常", ((System.currentTimeMillis() - start) <= TimeUnit.MILLISECONDS.toMillis(10)));
-                Assert.assertTrue("(interrupt是用来停止线程阻塞状态的)如果在wait前被中断,调用wait将抛出中断异常(表示因为中断无法进入等待)", e instanceof InterruptedException);
+                Assert.assertTrue("wait前被interrupt,调用wait直接抛出中断异常,但并不释放锁", Thread.holdsLock(lock));
+                Assert.assertTrue("(interrupt是用来停止线程阻塞状态的)如果在wait前被中断,调用wait将直接抛出中断异常(表示因为中断无法进入等待)", e instanceof InterruptedException);
             }
             LogUtils.log("complete wait()");
 
