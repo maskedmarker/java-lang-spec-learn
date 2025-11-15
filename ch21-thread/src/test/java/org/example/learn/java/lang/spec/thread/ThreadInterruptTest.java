@@ -288,7 +288,9 @@ public class ThreadInterruptTest {
 
     /**
      * 注意: interrupt是用来停止线程阻塞状态的
-     * thread在wait后(即已经调用wait,还没从wait返回,此时没持有锁)被interrupt,返回wait时会抛出中断异常(返回wait时线程是持有锁的)
+     * thread在wait后(即已经调用wait,还没从wait返回,此时没持有锁)被interrupt,线程会被唤醒然后重新去抢占锁,
+     *                                                                                        抢占锁成功,获得锁后以抛出中断异常的方式退出wait(返回wait时线程是持有锁的)
+     *                                                                                        抢占锁失败,重新挂起自己
      */
     @Test
     public void test242() throws InterruptedException {
