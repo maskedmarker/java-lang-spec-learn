@@ -198,9 +198,11 @@ public class ThreadInterruptTest {
     }
 
     /**
-     * 获取内部锁失败 线程进入entry-queue(入口队列)
-     * wait() -> 线程进入 wait-queue(等待队列)
-     * notify/notifyAll -> 线程从 wait-queue重新放入entry-queue
+     * 获取内部锁失败 线程进入entry-queue(入口队列),然后挂起自己
+     * wait() -> 线程进入 wait-queue(等待队列),然后挂起自己
+     * notify/notifyAll -> 线程从 wait-queue重新放入entry-queue(然后等待monitorexit时被从entry-queue取出被唤醒)
+     *
+     * 内置锁(monitor)只提供了排他性,防止其他线程并发执行;至于当前环境状态是否满足业务需要,需要用户自己来判断.
      */
     @Test
     public void test23() throws InterruptedException {
@@ -214,7 +216,7 @@ public class ThreadInterruptTest {
                     LogUtils.log("finish wait()");
                 } catch (InterruptedException e) {
                     Assert.assertFalse("抛出异常时,需要清除中断位", Thread.currentThread().isInterrupted());
-                    LogUtils.log("线程因为中断而提前恢复调度,并抢锁成功");
+                    LogUtils.log("线程因为中断而提前恢复调度,并在抢锁成功后退出等待队列,检查完中断位后,抛出异常");
                 }
             }
             LogUtils.log("thread is at the end of running | isInterrupted=%s", Thread.currentThread().isInterrupted());
@@ -231,7 +233,7 @@ public class ThreadInterruptTest {
         while (!Thread.State.WAITING.equals(workerThread.getState())) {
             Thread.yield();
         }
-        Assert.assertTrue("", ((System.currentTimeMillis() - start) <= TimeUnit.MILLISECONDS.toMillis(100)));
+        Assert.assertTrue("线程因为中断而提前恢复调度,并在抢锁成功后退出等待队列,检查完中断位后,抛出异常.因为没有其他线程争抢,所以抢占锁很快就能完成", ((System.currentTimeMillis() - start) <= TimeUnit.MILLISECONDS.toMillis(100)));
 
         // 防止mainThread提前被junit回收
         ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
