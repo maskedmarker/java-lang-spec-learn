@@ -19,6 +19,10 @@ import java.util.concurrent.locks.LockSupport;
  * interrupt会打断sleep导致的线程阻塞,线程提前解除阻塞并抛出异常,同时清除中断标识
  * interrupt会打断park导致的线程挂起,线程提前恢复调度
  * interrupt不会打断monitorenter指令导致的线程阻塞
+ *
+ * interrupt会打断线程进入waiting状态,即调用wait时发生中断异常;
+ * 线程进入waiting状态后,中断会恢复唤醒调度重新抢锁(获得锁后抛出异常来退出wait方法)
+ *
  */
 public class ThreadInterruptTest {
 
@@ -192,6 +196,144 @@ public class ThreadInterruptTest {
         ThreadUtils.yieldWait(100, TimeUnit.MICROSECONDS);
         Assert.assertTrue("worker-thread被monitorenter阻塞", !Thread.State.BLOCKED.equals(workerThread.getState()));
     }
+
+    /**
+     * 获取内部锁失败 线程进入entry-queue(入口队列)
+     * wait() -> 线程进入 wait-queue(等待队列)
+     * notify/notifyAll -> 线程从 wait-queue重新放入entry-queue
+     */
+    @Test
+    public void test23() throws InterruptedException {
+        final Object lock = new Object();
+
+        Thread workerThread = new Thread(() -> {
+            synchronized (lock) {
+                try {
+                    LogUtils.log("begin wait()");
+                    lock.wait();
+                    LogUtils.log("finish wait()");
+                } catch (InterruptedException e) {
+                    Assert.assertFalse("抛出异常时,需要清除中断位", Thread.currentThread().isInterrupted());
+                    LogUtils.log("线程因为中断而提前恢复调度,并抢锁成功");
+                }
+            }
+            LogUtils.log("thread is at the end of running | isInterrupted=%s", Thread.currentThread().isInterrupted());
+        }, "worker-thread");
+        workerThread.start();
+
+        // 等worker-thread已经跑起来了
+        ThreadUtils.yieldWait(5, TimeUnit.SECONDS);
+        Assert.assertEquals("workerThread释放锁而进入等待队列而非入口队列,只有重新进入入口队列才有可能被重新选中恢复调度", Thread.State.WAITING, workerThread.getState());
+
+
+        long start = System.currentTimeMillis();
+        workerThread.interrupt();
+        while (!Thread.State.WAITING.equals(workerThread.getState())) {
+            Thread.yield();
+        }
+        Assert.assertTrue("", ((System.currentTimeMillis() - start) <= TimeUnit.MILLISECONDS.toMillis(100)));
+
+        // 防止mainThread提前被junit回收
+        ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
+    }
+
+    /**
+     * 注意: interrupt是用来停止线程阻塞状态的
+     * thread在wait前被interrupt,调用wait会抛出中断异常(在调用wait时,线程是已经持有锁的)
+     */
+    @Test
+    public void test241() throws InterruptedException {
+        final Object lock = new Object();
+
+        Thread workerThread;
+        synchronized (lock) {
+            LogUtils.log("thread has got synchronized lock");
+
+            workerThread = new Thread(() -> {
+                LogUtils.log("before acquiring monitor, thread[%s] is running | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                synchronized (lock) {
+                    LogUtils.log("thread[%s] has got synchronized lock  | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                    // 很长时间占用monitor
+                    ThreadUtils.yieldWait(50, TimeUnit.SECONDS);
+                }
+                LogUtils.log("thread[%s] has release synchronized lock | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                LogUtils.log("thread[%s] is at the end of running | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+            }, "worker-thread");
+            workerThread.start();
+
+            // 等worker-thread已经跑起来了
+            ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
+            Assert.assertTrue("在当前线程释放锁之前,worker-thread被monitorenter阻塞", Thread.State.BLOCKED.equals(workerThread.getState()));
+
+            // 准备在wait释放monitor前,中断自己
+            Thread.currentThread().interrupt();
+            LogUtils.log("finish to interrupt self", Thread.currentThread().getName());
+            LogUtils.log("begin wait()");
+            long start = System.currentTimeMillis();
+            try {
+                lock.wait();
+            } catch (Exception e) {
+                Assert.assertTrue("线程是已经持有锁且已经被中断,在调用wait时直接抛出中断异常", ((System.currentTimeMillis() - start) <= TimeUnit.MILLISECONDS.toMillis(10)));
+                Assert.assertTrue("(interrupt是用来停止线程阻塞状态的)如果在wait前被中断,调用wait将抛出中断异常(表示因为中断无法进入等待)", e instanceof InterruptedException);
+            }
+            LogUtils.log("complete wait()");
+
+
+            LogUtils.log("thread[%s] begin to release synchronized lock", Thread.currentThread().getName());
+        }
+        LogUtils.log("thread[%s] has release synchronized lock", Thread.currentThread().getName());
+    }
+
+    /**
+     * 注意: interrupt是用来停止线程阻塞状态的
+     * thread在wait后(即已经调用wait,还没从wait返回,此时没持有锁)被interrupt,返回wait时会抛出中断异常(返回wait时线程是持有锁的)
+     */
+    @Test
+    public void test242() throws InterruptedException {
+        final Object lock = new Object();
+
+        final Thread mainThread = Thread.currentThread();
+        Thread workerThread;
+        synchronized (lock) {
+            LogUtils.log("thread has got synchronized lock");
+
+            workerThread = new Thread(() -> {
+                LogUtils.log("before acquiring monitor, thread[%s] is running | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                synchronized (lock) {
+                    LogUtils.log("thread[%s] has got synchronized lock  | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                    // 当持有锁时,mainThread已经通过wait释放锁了
+                    mainThread.interrupt();
+                    // 只要无法获得锁,mainThread即使已经被中断,此时因为阻塞被挂起无法被cpu调度,也就无法抛出异常
+                    ThreadUtils.yieldWait(5, TimeUnit.SECONDS);
+                    Assert.assertTrue("只要无法获得锁,mainThread即使已经被中断,还保持WAITING的状态,无法抛出异常", !Thread.State.WAITING.equals(mainThread.getState()));
+                }
+                LogUtils.log("thread[%s] has release synchronized lock | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+                LogUtils.log("thread[%s] is at the end of running | isInterrupted=%s", Thread.currentThread().getName(), Thread.currentThread().isInterrupted());
+            }, "worker-thread");
+            workerThread.start();
+
+            // 等worker-thread已经跑起来了
+            ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
+            Assert.assertTrue("在当前线程释放锁之前,worker-thread被monitorenter阻塞", Thread.State.BLOCKED.equals(workerThread.getState()));
+
+            // 通过wait释放锁
+            LogUtils.log("begin wait()");
+            try {
+                long start = System.currentTimeMillis();
+                lock.wait();
+                Assert.assertTrue("在获得锁之前无法退出wait方法.当获得锁时且在退出wait方法前再检查一下中断位,如果没有中断就正常退出,否则以抛异常的形式退出", ((System.currentTimeMillis() - start) >= TimeUnit.SECONDS.toMillis(5)));
+            } catch (Exception e) {
+                Assert.assertTrue("(interrupt是用来停止线程阻塞状态的)如果在wait后被中断,获得锁后将以抛出中断异常的形式退出wait(表示等待中曾发生中断)", e instanceof InterruptedException);
+            }
+            LogUtils.log("complete wait()");
+
+            LogUtils.log("thread[%s] begin to exit the sync block", Thread.currentThread().getName());
+        }
+        LogUtils.log("thread[%s] has exited the sync block", Thread.currentThread().getName());
+        ThreadUtils.yieldWait(100, TimeUnit.MICROSECONDS);
+        Assert.assertTrue("worker-thread被monitorenter阻塞", !Thread.State.BLOCKED.equals(workerThread.getState()));
+    }
+
 
     /**
      * park()会因为interrupt而提前结束
