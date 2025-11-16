@@ -36,7 +36,7 @@ cxq队列的入队/出队
 获取monitor锁失败 -> 线程进入entry-queue(入口队列),然后挂起自己
 wait() -> 线程进入 wait-queue(等待队列),然后挂起自己
 notify/notifyAll -> 线程从 wait-queue重新放入entry-queue
-interrupt -> 线程
+interrupt -> 线程被唤醒,然后去抢占锁如果失败继续挂起自己,如果成功将自己节点从队列移除,
 
 内置锁(monitor)只提供了排他性,防止其他线程并发执行;至于当前环境状态是否满足业务需要,需要用户自己来判断.
 ```
@@ -596,3 +596,20 @@ static void jdk_signal_handler(int sig, siginfo_t* info, void* uc) {
 }
 ```
 
+### Atomic::cmpxchg
+
+```text
+cmpxchgl 汇编指令是整个 Atomic::cmpxchg 方法的核心
+
+cmpxchgl 指令是包含在 x86 架构及 IA-64 架构中的一个原子条件指令，
+它会首先比较dest指针指向的内存值是否和 compare_value 的值相等，如果相等，则双向交换 dest 与 exchange_value，否则就单方面地将 dest 指向的内存值交给exchange_value。
+这条指令完成了整个 CAS 操作，因此它也被称为 CAS 指令。
+
+
+cas(address, expectedValue, newValue)执行原子操作时,如果该内存处的值为expectedValue,则内存处的值更新为newValue;如果内存处的值不是expectedValue,则内存处的值不做更新.cas总是返回当前内存处的值.
+
+cmpxchg等价于
+boolean cmpxchg(newValue, *address, expectedValue){
+   return cas(address, expectedValue, newValue) == expectedValue;
+}
+```
