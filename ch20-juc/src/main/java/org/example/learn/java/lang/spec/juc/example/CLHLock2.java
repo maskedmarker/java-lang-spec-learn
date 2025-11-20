@@ -14,9 +14,9 @@ import java.util.concurrent.locks.Lock;
  *
  *  利用队列的有序性将并发的线程排序,靠前的线程先获得锁
  *
- *  注意:  CLHLock是原版,CLHLock2是精简版
+ *  注意: CLHLock是原版,CLHLock2是精简版
  */
-public class CLHLock implements Lock {
+public class CLHLock2 implements Lock {
 
     // ⚠️这个queue到底是容纳什么的队列??
     // 队列节点的先后顺序容纳的是并发线程抢夺锁的优先顺序;(核心功能)
@@ -26,10 +26,18 @@ public class CLHLock implements Lock {
 
 
     class QNode {
+
+        // 将状态分的更细致
+        static final int STATUS_RELEASED = -1;
+        static final int STATUS_WAITING = 0;
+        static final int STATUS_ACQUIRED = 1;
+
+
         // ⚠️ 注意locked字段的解释,尤其是"or is waiting for the lock"
-        // If the field is true, then the corresponding thread has either acquired the lock, or is waiting for the lock.
-        // If the field is false, then the thread has released the lock.
-        volatile boolean locked = false;
+        // If the field is -1, then the thread has released the lock.
+        // If the field is 0, then the corresponding thread is waiting for the lock.
+        // If the field is 1, then the corresponding thread has either acquired the lock.
+        volatile int status;
 
         volatile Thread thread;
 
@@ -37,7 +45,7 @@ public class CLHLock implements Lock {
         volatile QNode prev;
 
         void reset(){
-            this.locked = false;
+            this.status = -2;
             this.thread = null;
             this.prev = null;
         }
@@ -49,15 +57,17 @@ public class CLHLock implements Lock {
     // 保存线程与QNode的映射关系
     final ThreadLocal<QNode> qNodeKeeper = ThreadLocal.withInitial(QNode::new);
 
-    public CLHLock() {
-        tail = new AtomicReference<QNode>(new QNode()); // 锁需要一个dummy-node(locked=false)表示初始状态(锁已被释放)
+    public CLHLock2() {
+        QNode initStatus = new QNode();
+        initStatus.status = QNode.STATUS_RELEASED;
+        tail = new AtomicReference<QNode>(initStatus); // 锁需要一个dummy-node(locked=false)表示初始状态(锁已被释放)
     }
 
     @Override
     public void lock() {
         QNode qnode = qNodeKeeper.get();
         // 等待锁
-        qnode.locked = true;
+        qnode.status = QNode.STATUS_WAITING;
 
         // CAS操作来完成在队尾入队,并原子性获取到原队尾
         QNode pred = tail.getAndSet(qnode);
@@ -65,9 +75,11 @@ public class CLHLock implements Lock {
         qnode.prev = pred;
 
         // [按照入队的先后顺序]等待前节点释放锁
-        while (pred.locked) {
+        while (pred.status >= 0) {
             // spin
         }
+        // 已经获得锁
+        qnode.status = QNode.STATUS_ACQUIRED;
     }
 
     @Override
@@ -80,7 +92,7 @@ public class CLHLock implements Lock {
         qNode.thread = null;
 
         // 释放锁
-        qNode.locked = false;
+        qNode.status = QNode.STATUS_RELEASED;
 
         // 为了节省内存开销实现循环使用,将前节点回收利用
         prev.reset();
