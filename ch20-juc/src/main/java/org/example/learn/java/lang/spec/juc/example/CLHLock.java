@@ -10,6 +10,9 @@ import java.util.concurrent.locks.Lock;
  *  因为ALock需要提前知道并发线程数的最大值,CLHLock通过隐式queue支持无穷大的并发线程数
  *  与ALock一样,每个线程在spin时盯着的内存地址是不同的
  *
+ *
+ *  注意: 描述的边界,这里讨论的是锁的实现,而非站在锁的使用方的视角
+ *
  *  利用入队的CAS原子操作将线程按时间排序.
  */
 public class CLHLock implements Lock {
