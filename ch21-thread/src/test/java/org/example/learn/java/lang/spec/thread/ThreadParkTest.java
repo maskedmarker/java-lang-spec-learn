@@ -12,6 +12,8 @@ import java.util.concurrent.locks.LockSupport;
  * park()和parkNanos(timeout) 与wait()和wait(timeout)的线程状态一样
  *
  * 如果线程在调用 LockSupport.park() 时已经被中断，或者在 park() 期间被中断， 那么该 park() 调用会立即返回（不再阻塞）。park()不会自动清除中断标志
+ *
+ * 线程无法判断自己是否已经被unpark过,因为中断/A spurious wakeup都会让线程立即退出park方法
  */
 public class ThreadParkTest {
 
