@@ -22,7 +22,7 @@
 4. AQS没有选择让线程spin忙等待而是挂起等待,虽然这样节省了cpu开销却让线程在挂起等待时缺失了感知前驱节点的status状态改变的能力.这就要求前驱节点在结束占用锁资源后通过结束后驱节点的挂起等待来恢复感知能力.
 5. ⚠️AQS由于node节点唤醒node.next节点的操作与node.next节点的超时/中断引发的取消操作可能会同时发生,存在并发竟态问题.导致前节点无法准确确定该唤醒哪个后面节点(可能刚决定了一个后面节点,它却同时发生了超时/中断引发的取消操)
 6. ⚠️解决这种存在的并发问题的暴力简单思路是模仿CLH-lock,让前驱节点唤醒后面所有的节点.
-7. AQS选择了更加精细的操作:如果node能准确判断绝不会并发,就unpark唤醒后node.next节点;如果不能百分比确定不存在并发,就
+7. AQS选择了更加精细的操作,唤醒一个或者部分节点线程.
 ```
 
 
@@ -61,7 +61,7 @@ AQS节点的next有如下操作:
 1. 节点入队同步队列时,为前节点设置next(cas-tail可以保证不会出现并发设置同一个节点的next值)
 2. 节点线程获得锁后,将自己节点设置为head后,再将自己的prev节点(即旧头节点)的next设置为null来帮助gc(线程节点按前后顺序依次出队,由于每个节点的prev都是不同的,也不存在并发写入next)
 3. 在同步队列节点线程挂起自己前,修复prev队列中自己节点(状态正常)前的已经取消的节点(prev队列中正常节点前的取消节点集合是不会重叠的,这里也不存在并发写入问题)
-4. 取消节点时,将自己节点的next设置为自己(这是存在自己节点线程和next节点线程同时写入的问题, todo 待解释)
+4. 取消节点时,将自己节点的next设置为自己(为了维护invariant)
 
 ```
 
@@ -108,6 +108,12 @@ node.prev/thread值都是node节点线程自己设置的(非其他线程).
 node.next值会被其他线程设置.        
 ```
 
+
+```text
+node.waitStatus == CANCEL  表示node节点已取消,请忽略该节点的存在
+node.waitStatus == 0       表示node节点后面[不确定有没有]挂起等待的线程待唤醒
+node.waitStatus == SIGNAL  表示node节点后面[有]挂起等待的线程待唤醒
+```
 
 ## 核心方法
 
@@ -186,9 +192,9 @@ private void cancelAcquire(Node node) {
     node.waitStatus = Node.CANCELLED;
 
 
-    // ⚠️ 在取消等待时,为了防止该节点线程浪费并发的unpark,除了尾节点可以浪费unpark,其他节点都要将unpark通过调用unparkSuccessor将unpark传递给后面的节点.
-    //     如果没有并发unpark,且node是中间节点,前节点也未取消,那该节点的取消操作只需设置为CANCELLED就可以.
-    // 如果node是中间节点,前节点还未唤醒也未取消,在无并发的情况下,只需将自己节点设置为CANCELLED即可
+    // 💯 尾节点不怕遗漏unpark
+    // 💯 中间节点只要保证在前节点状态正常时将其设置为CANCELLED(不会遗漏unpark,前面正常节点顶着)
+    // 💯 第一线程节点取消时一定要unparkSuccessor(既是为了防止并发其他线程都挂起了,也是为了防止存在竟态问题的release的unparkSuccessor)
 
     // 当前线程节点是尾节点 (也可以无脑cas-tail来判断,前面的node==tail是一种小优化)
     if (node == tail && compareAndSetTail(node, pred)) {
@@ -196,7 +202,7 @@ private void cancelAcquire(Node node) {
         compareAndSetNext(pred, predNext, null);
     } else {
         int ws;
-        // 当前线程节点是中间节点(不是尾节点,也不是第一个线程节点),需要将前节点设置为SIGNAL(因为存在可能:后节点设置的本节点waitStatus被自己强制设置成了CANCELLED)
+        // 当前线程节点是中间节点(不是尾节点也不是第一个线程节点)时,后面有待唤醒的线程,需要趁前节点正常时设置为SIGNAL才有可能唤醒后面线程(依赖前面节点负责任的唤醒)
         if (pred != head &&
             ((ws = pred.waitStatus) == Node.SIGNAL || (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&   // 是为了防止前节点有并发(并发cancelAcquire/unparkSuccessor)
             pred.thread != null) {
@@ -236,21 +242,15 @@ node节点在同步队列中的位置:
     没有办法直接判断当前线程是否被unpark.
 
 
-只能枚举一部分情况
-1. node节点是尾节点,因为后面没有等待唤醒的线程,无论node线程有没有消费unpark都不算浪费unpark.                ==> compareAndSetTail(node, pred).
-2. node节点是第一线程节点,可能发生并发unpark                                                         ==> (pred == head)
-3. node节点的prev前节点也发生了取消操作,此时无法在其上面设置SIGNAL,只能传递unpark                         ==> (pred.thread == null) 
-4. pred.waitStatus不是SIGNAL
+compareAndSetTail(node, pred) 保证了node节点是尾节点,因为后面没有等待唤醒的线程,无论node线程有没有消费unpark都不算浪费unpark. 
+(pred.waitStatus==SIGNAL  && pred.thread != null)保证了cancelAcquire(node)发生在cancelAcquire(node.prev)前,unparkSuccessor的unpark最多落在node.prev上,不会落在node节点线程上.
+((ws = pred.waitStatus) == Node.SIGNAL || (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) && pred.thread != null 也就是说,前节点是正常时,本节点取消时只要保证前节点线程知道后面有待唤醒的节点就行.
+    如此递归到第一线程节点不适用,因为第一线程节点前面没有等待的节点线程了.(pred != head)就是为了这个准备的
+(pred != head) 同时,如果其他线程都在等待,第一线程节点此时发生取消操作,必须要唤醒后面的线程,不然这些线程就没有被唤醒的机会了.
 
-
-
-------------------------------------------------------------------------------
-1. prev节点的cancelAcquire 导致node.prev.waitStatus>0
-2. unparkSuccessor(node.prev)导致node.prev.waitStatus==0
-3. next节点的acquireQueued 导致node.waitStatus==S
-4. 本节点node的cancelAcquire 导致node.waitStatus==C
-5. 同步队列的自我管理 导致node.prev.next改变
-
+else存在的场景都是存在竟态问题的并发cancelAcquire/unparkSuccessor
+    比如第一线程节点: 刚释放锁的线程unparkSuccessor了第一线程,同时第一线程也发生了cancelAcquire,由于这2个方法执行都是多step的,无法再优化了,只能为了防止遗漏unpark无脑再unparkSuccessor生成一个供后面使用的unpark.
+    比如中间节点:在取消时,发现前节点也发生取消了,无法保证unparkSuccessor的unpark是作用在了前节点线程还是本节点线程,所以为了防止遗漏唤醒也是无脑再unparkSuccessor生成一个供后面使用的unpark.
 ```
 
 
