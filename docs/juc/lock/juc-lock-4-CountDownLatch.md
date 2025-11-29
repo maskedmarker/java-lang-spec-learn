@@ -1,0 +1,104 @@
+# juc-AQS-CountDownLatch
+
+CountDownLatch不支持Lock接口也不支持Condition接口,但是自己却实现了一个类似与Condition的await方法.
+
+CountDownLatch.Sync在共享模式下工作.
+
+
+## 使用样例
+```text
+class Driver { 
+  void main() throws InterruptedException {
+    CountDownLatch startSignal = new CountDownLatch(1);
+    CountDownLatch doneSignal = new CountDownLatch(N);
+
+    for (int i = 0; i < N; ++i) {
+      new Thread(new Worker(startSignal, doneSignal)).start();
+    }
+
+    doSomethingElse();            // don't let run yet
+    startSignal.countDown();      // let all threads proceed
+    doSomethingElse();
+    doneSignal.await();           // wait for all to finish
+  }
+}
+
+class Worker implements Runnable {
+  private final CountDownLatch startSignal;
+  private final CountDownLatch doneSignal;
+  Worker(CountDownLatch startSignal, CountDownLatch doneSignal) {
+    this.startSignal = startSignal;
+    this.doneSignal = doneSignal;
+  }
+  public void run() {
+    try {
+      startSignal.await();
+      doWork();
+      doneSignal.countDown();
+    } catch (InterruptedException ex) {} // return;
+  }
+
+  void doWork() { ... }
+}
+```
+
+## 源码实现
+
+AQS的acquire类方法和release类方法都会引起AQS的状态变化,但最主要的不同体现在
+acquire类方法可能会将线程挂起等待,而release类方法永远不会挂起线程.
+
+CountDownLatch.await在latch未达到0时阻塞调用方,所以必须使用acquire类的方法;
+而CountDownLatch.countDown不能阻塞调用方,所以必须使用release类的方法;
+而CountDownLatch支持多个线程同时调用,所以使用share-mode
+
+```text
+public class CountDownLatch {
+    private final Sync sync;
+    
+    public void countDown() {
+        sync.releaseShared(1);
+    }
+    
+    public void await() throws InterruptedException {
+        // AQS的acquire会因条件不满足而挂起等待,所在CountDownLatch.await这里只能使用acquire类的方法;那么所在CountDownLatch.countDown那里只能使用release类的方法
+        sync.acquireSharedInterruptibly(1);
+    }
+    
+    public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
+        return sync.tryAcquireSharedNanos(1, unit.toNanos(timeout));
+    }
+    
+    private static final class Sync extends AbstractQueuedSynchronizer {
+
+        Sync(int count) {
+            setState(count);
+        }
+
+        int getCount() {
+            return getState();
+        }
+        // This method should query if the state of the object permits it to be acquired in the shared mode, and if so to acquire it.
+        // a negative value on failure; 
+        // zero if acquisition in shared mode succeeded but no subsequent shared-mode acquire can succeed; 
+        // and a positive value if acquisition in shared mode succeeded and subsequent shared-mode acquires might also succeed, in which case a subsequent waiting thread must check availability
+        protected int tryAcquireShared(int acquires) {
+            // 该方法不用来抢锁资源,仅仅用来判断状态是否达到0.入参acquires无意义忽略.
+            
+            // 当status为0时表示成功,否则失败需要等待到status为0.
+            return (getState() == 0) ? 1 : -1;
+        }
+
+        protected boolean tryReleaseShared(int releases) {
+            // Decrement count; signal when transition to zero
+            for (;;) {
+                int c = getState();
+                if (c == 0)
+                    return false;
+                int nextc = c-1;
+                if (compareAndSetState(c, nextc))
+                    return nextc == 0;
+            }
+        }
+    }
+}
+```
