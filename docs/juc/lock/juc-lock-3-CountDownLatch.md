@@ -89,20 +89,26 @@ private static final class Sync extends AbstractQueuedSynchronizer {
     protected int tryAcquireShared(int acquires) {
         // 该方法不用来抢锁资源,仅仅用来判断状态是否达到0.入参acquires无意义忽略.
         
-        // 当status为0时表示成功,否则失败需要等待到status为0.
+        // 当剩余计数为0时,才不用等待
         return (getState() == 0) ? 1 : -1;
     }
 
     protected boolean tryReleaseShared(int releases) {
-        // Decrement count; signal when transition to zero
+        // 存在并发countDown,所以cas需要重试
         for (;;) {
             int c = getState();
+            // state变为0后,不再需要唤醒线程.
             if (c == 0)
                 return false;
+            
+            // 设计者仅要求从1变为0的那个操作唤醒等待的线程.
             int nextc = c-1;
             if (compareAndSetState(c, nextc))
                 return nextc == 0;
         }
     }
 }
+
+由于共享模式的级联唤醒,只需要一个唤醒(state从1变为0)就能将所有已经等待的都唤醒(此时getState() == 0).
+state变为0后,不再需要唤醒线程.是因为此时(getState() == 0),tryAcquireShared不会再导致线程挂起.
 ```

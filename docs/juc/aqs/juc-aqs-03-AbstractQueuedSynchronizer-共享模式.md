@@ -119,8 +119,8 @@ Release action for shared mode -- signals successor and ensures propagation.
 (Note: For exclusive mode, release just amounts to calling unparkSuccessor of head if it needs signal.) 独占模式的release只需检查头节点的waitStatus,因为不存在并发修改头节点的waitStatus
 
 
-⚠️共享模式下,多个线程并发执行releaseShared,会出现被唤醒的线程数小于释放锁的线程数.(所以在共享模式下,在acquire端增加级联唤醒的能力,减少还有锁资源而需要唤醒而未唤醒的概率)
 ⚠️doReleaseShared不区分共享节点和独占节点.(独占模式完全不区分共享节点和独占节点)
+⚠️共享模式下,多个线程并发执行releaseShared,会出现被唤醒的线程数小于释放锁的线程数,甚至极端情况下只能唤醒一个线程.(哪怕只唤醒一个线程,由于acquire端增加级联唤醒的能力,也足够将尽可能多的线程唤醒)
 
 ```text
 private void doReleaseShared() {
