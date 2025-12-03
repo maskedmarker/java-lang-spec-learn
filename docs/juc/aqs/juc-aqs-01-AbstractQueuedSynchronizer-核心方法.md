@@ -240,6 +240,7 @@ node节点在同步队列中的位置:
 ⚠️讨论的核心议题是: 在执行节点node的cancelAcquire的过程中,如何避免node节点线程被unpark(即前面节点的unparkSuccessor在node节点线程上调用了unpark)导致node后面节点因缺少这个unpark而无法唤醒.
 ⚠️怎么判断有没有被unpark??? 
     没有办法直接判断当前线程是否被unpark.
+    其次unpark是无法叠加的.(在共享模式下,如果多个线程同时唤醒一个要执行取消操作的线程,取消节点执行一次unparkSuccessor是不够的.)
 
 
 compareAndSetTail(node, pred) 保证了node节点是尾节点,因为后面没有等待唤醒的线程,无论node线程有没有消费unpark都不算浪费unpark. 
