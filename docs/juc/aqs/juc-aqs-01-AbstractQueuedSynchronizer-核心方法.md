@@ -124,7 +124,9 @@ AQS要解决的核心问题就是unparkSuccessor/cancelAcquire的并发问题.
 ### unparkSuccessor(不支持中断)
 
 unparkSuccessor必定能保证node后最近的一个节点(如果存在的话)线程恢复调度.
-注意:可能unpark一个正常发生取消操作的节点线程.
+注意:
+1. 可能unpark一个正常发生取消操作的节点线程.💯
+2. 受限于unpark在一个线程上无法叠加,对同一个节点多次调用unparkSuccessor可能会浪费unpark.💯
 
 ````text
 private void unparkSuccessor(Node node) {
