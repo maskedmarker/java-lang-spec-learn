@@ -69,6 +69,7 @@ private void doAcquireShared(int arg) {
 1. 在获取共享锁成功后,设置head节点
 2. 根据调用tryAcquireShared返回的状态以及节点本身的等待状态来判断是否要需要唤醒后继线程
 
+⚠️ 如果node.next是独占节点,级联唤醒将停止.
 
 ```text
 private void setHeadAndPropagate(Node node, int propagate) {
@@ -118,7 +119,7 @@ Release action for shared mode -- signals successor and ensures propagation.
 
 
 ⚠️共享模式下,多个线程并发执行releaseShared,会出现被唤醒的线程数小于释放锁的线程数.(所以在共享模式下,在acquire端增加级联唤醒的能力,减少还有锁资源而需要唤醒而未唤醒的概率)
-
+⚠️doReleaseShared不区分共享节点和独占节点.(独占模式完全不区分共享节点和独占节点)
 
 ```text
 private void doReleaseShared() {
