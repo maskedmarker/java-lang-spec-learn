@@ -41,7 +41,7 @@ private void doAcquireShared(int arg) {
                 // 独占模式下,一次tryAcquire可能就会将锁资源占用完;共享模式下,一次tryAcquireShared通常不会占用完
                 int r = tryAcquireShared(arg);
                 if (r >= 0) {
-                    // 💯通过cascading的连带唤醒形式,来实现类似于靠前的n个都获得尝试权,同时还维持了FIFO的承诺
+                    // 💯通过cascading的级联唤醒形式,来实现类似于靠前的n个都获得尝试权,同时还维持了FIFO的承诺
                     setHeadAndPropagate(node, r);
                     p.next = null;
                     if (interrupted)
@@ -83,7 +83,7 @@ private void setHeadAndPropagate(Node node, int propagate) {
         Node s = node.next;
         
         // (s == null)则node此时是尾节点(要防止遗漏可能马上就有的新尾节点);
-        // 本方法主要是为了实现共享模式下的连带唤醒形式 s.isShared()判断是主体,(s == null)是edge-case
+        // 本方法主要是为了实现共享模式下的级联唤醒形式 s.isShared()判断是主体,(s == null)是edge-case
         if (s == null || s.isShared())
             doReleaseShared(); // 唤醒
     }
@@ -117,7 +117,7 @@ Release action for shared mode -- signals successor and ensures propagation.
 (Note: For exclusive mode, release just amounts to calling unparkSuccessor of head if it needs signal.) 独占模式的release只需检查头节点的waitStatus,因为不存在并发修改头节点的waitStatus
 
 
-⚠️共享模式下,多个线程并发执行releaseShared,会出现被唤醒的线程数小于释放锁的线程数.(所以在共享模式下,在acquire端增加连带唤醒的能力,减少还有锁资源而需要唤醒而未唤醒的概率)
+⚠️共享模式下,多个线程并发执行releaseShared,会出现被唤醒的线程数小于释放锁的线程数.(所以在共享模式下,在acquire端增加级联唤醒的能力,减少还有锁资源而需要唤醒而未唤醒的概率)
 
 
 ```text
