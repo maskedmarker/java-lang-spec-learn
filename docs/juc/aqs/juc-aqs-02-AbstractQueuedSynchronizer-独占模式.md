@@ -145,7 +145,7 @@ private static boolean shouldParkAfterFailedAcquire(Node pred, Node node) {
 
 ```text
 public final boolean release(int arg) {
-    // tryRelease不应该支持中断
+    // tryRelease不应该支持中断. ⚠️tryReleaseShared返回true才会唤醒线程
     if (tryRelease(arg)) {
         // 为了FIFO,唤醒头节点后最近的一个正常节点线程
         Node h = head;

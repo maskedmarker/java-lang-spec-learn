@@ -98,6 +98,7 @@ private void setHeadAndPropagate(Node node, int propagate) {
 
 ```text
 public final boolean releaseShared(int arg) {
+    // tryRelease不应该支持中断.   ⚠️tryReleaseShared返回true才会唤醒线程
     if (tryReleaseShared(arg)) {
         doReleaseShared();
         return true;
