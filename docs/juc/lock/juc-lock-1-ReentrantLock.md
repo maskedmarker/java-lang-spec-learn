@@ -62,7 +62,7 @@ final boolean nonfairTryAcquire(int acquires) {
     final Thread current = Thread.currentThread();
     int c = getState();
     
-    // 不管state状态,也不管同步队列中前面的排队者,直接尝试cas-state来抢占锁资源      // 虽然这里看起来更直观,但是不如原代码更高效.原代码可以中额外的(c == 0)判断可以规避c!=0时的盲目cas执行.
+    // 不管state状态,也不管同步队列中前面的排队者,直接尝试cas-state来抢占锁资源      // 虽然这里看起来更直观,但是不如原代码更高效.原代码可以中额外的(c == 0)判断可以规避c!=0时的盲目执行cas带来的开销.💯
     if (compareAndSetState(0, acquires)) {
         setExclusiveOwnerThread(current);
         return true;
