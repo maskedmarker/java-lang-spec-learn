@@ -1,5 +1,9 @@
 # juc-AQS-CountDownLatch
 
+AQS.state的含义:
+state表示剩余计数
+
+
 CountDownLatch不支持Lock接口也不支持Condition接口,但是自己却实现了一个类似与Condition的await方法.
 
 CountDownLatch.Sync在共享模式下工作.
@@ -67,37 +71,37 @@ public class CountDownLatch {
     public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
         return sync.tryAcquireSharedNanos(1, unit.toNanos(timeout));
     }
+}
+```
+
+### Sync
+```text
+private static final class Sync extends AbstractQueuedSynchronizer {
+
+    Sync(int count) {
+        setState(count);
+    }
+
+    int getCount() {
+        return getState();
+    }
     
-    private static final class Sync extends AbstractQueuedSynchronizer {
+    protected int tryAcquireShared(int acquires) {
+        // 该方法不用来抢锁资源,仅仅用来判断状态是否达到0.入参acquires无意义忽略.
+        
+        // 当status为0时表示成功,否则失败需要等待到status为0.
+        return (getState() == 0) ? 1 : -1;
+    }
 
-        Sync(int count) {
-            setState(count);
-        }
-
-        int getCount() {
-            return getState();
-        }
-        // This method should query if the state of the object permits it to be acquired in the shared mode, and if so to acquire it.
-        // a negative value on failure; 
-        // zero if acquisition in shared mode succeeded but no subsequent shared-mode acquire can succeed; 
-        // and a positive value if acquisition in shared mode succeeded and subsequent shared-mode acquires might also succeed, in which case a subsequent waiting thread must check availability
-        protected int tryAcquireShared(int acquires) {
-            // 该方法不用来抢锁资源,仅仅用来判断状态是否达到0.入参acquires无意义忽略.
-            
-            // 当status为0时表示成功,否则失败需要等待到status为0.
-            return (getState() == 0) ? 1 : -1;
-        }
-
-        protected boolean tryReleaseShared(int releases) {
-            // Decrement count; signal when transition to zero
-            for (;;) {
-                int c = getState();
-                if (c == 0)
-                    return false;
-                int nextc = c-1;
-                if (compareAndSetState(c, nextc))
-                    return nextc == 0;
-            }
+    protected boolean tryReleaseShared(int releases) {
+        // Decrement count; signal when transition to zero
+        for (;;) {
+            int c = getState();
+            if (c == 0)
+                return false;
+            int nextc = c-1;
+            if (compareAndSetState(c, nextc))
+                return nextc == 0;
         }
     }
 }

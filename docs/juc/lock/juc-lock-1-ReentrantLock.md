@@ -1,10 +1,11 @@
 # juc-AQS-ReentrantLock
 
 AQS.state的含义:
-state表示加锁计数.
+state表示重入次数.
 当state==0时,锁没有被持有;
-当state!=0时,锁被持有;
-当同一线程重复获取锁时,state增加一.
+当state>0时,锁被持有;
+当state>0 && currentThread == owner时,锁被前线程持有;
+
 
 
 

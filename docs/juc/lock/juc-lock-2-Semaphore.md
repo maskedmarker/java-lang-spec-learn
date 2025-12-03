@@ -12,6 +12,8 @@ acquire就是试图减少一个permit,如果permit<=0则挂起等待.
 
 Semaphore可以设置初始permit个数.如果初始permit个数为0,首个acquire会一直阻塞到第一个release向Semaphore中增加permit.
 
+## 源码实现
+
 ```text
 // Semaphore不支持Lock接口,也就不支持Condition
 public class Semaphore implements java.io.Serializable {
@@ -32,7 +34,7 @@ public class Semaphore implements java.io.Serializable {
 }
 ```
 
-## Sync
+### Sync
 
 ```text
 abstract static class Sync extends AbstractQueuedSynchronizer {
@@ -40,7 +42,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
     // ...
     
     final int nonfairTryAcquireShared(int acquires) {
-        // 💯 只要还有permit
+        // 💯 只要还有permit,可以多尝试几次 (当然这里也可以不用循环就cas-state一次,失败了先挂起然后通过共享模式的级联唤醒)
         for (;;) {
             int available = getState();
             int remaining = available - acquires;
@@ -53,7 +55,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
     }
 
     protected final boolean tryReleaseShared(int releases) {
-        // 通过重试完成cas,为state增加permit
+        // 💯 因为存在并发release,所以需要通过重试完成cas增加permit
         for (;;) {
             int current = getState();
             int next = current + releases;
@@ -68,10 +70,10 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 }
 
 (remaining < 0 || compareAndSetState(available, remaining)) 这个写法非常好,等价于 (remaining < 0 || (remaining >= 0 && compareAndSetState(available, remaining) == true)), 可以省略掉(remaining >= 0)
-即如果remaining小于0 或者当remaining大于等于0时cas-state成功
+即如果remaining小于0 或者当remaining大于等于0且cas-state成功
 ```
 
-## FairSync
+### FairSync
 ```text
 static final class FairSync extends Sync {
 
@@ -80,7 +82,7 @@ static final class FairSync extends Sync {
     }
 
     protected int tryAcquireShared(int acquires) {
-        // 💯
+        // 💯只要还有permit,可以多尝试几次
         for (;;) {
             // 为了FIFO的公平性,如果同步队列中有更早的排队者,直接放弃尝试,等待依次被唤醒后再去抢占锁
             if (hasQueuedPredecessors())
@@ -97,7 +99,7 @@ static final class FairSync extends Sync {
 ```
 
 
-## NonfairSync
+### NonfairSync
 
 ```text
 static final class NonfairSync extends Sync {
