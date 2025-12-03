@@ -1,65 +1,130 @@
 # juc-AQS-ReentrantLock
 
-## Lock
+AQS.state的含义:
+当state==0时,锁没有被持有;
+当state!=0时,锁被持有;
+
+
+
+## 使用样例
+
+## 源码实现
+
 ```text
-public interface Lock {
-    void lock();
-    boolean tryLock();
-    
-    void lockInterruptibly() throws InterruptedException;
-    boolean tryLock(long time, TimeUnit unit) throws InterruptedException;
-    
-    void unlock();
-    Condition newCondition();
+public class ReentrantLock implements Lock, java.io.Serializable {
+    private final Sync sync;
 }
 ```
 
-```text
-public Condition newCondition() {
-    return sync.newCondition();
-}
-```
-
-
-### tryRelease(独占模式)(不支持中断)
-
-因为当前时独占模式,即只有持有锁的那一个线程才会调用,不存在并发,所以tryRelease的实现
+### Sync
 
 ```text
-protected final boolean tryRelease(int releases) {
-    int c = getState() - releases;
-    // 因为是独占模式,需要检查当前线程否是是锁的持有者
-    if (Thread.currentThread() != getExclusiveOwnerThread())
-        throw new IllegalMonitorStateException();
-    
-    boolean free = false;
-    if (c == 0) {
-        free = true;
-        setExclusiveOwnerThread(null); // 如果是重入锁,持有3个permit,现在release 2个,还剩一个,此时就不能将set null
-    }
-    
-    // 因为是独占模式方法,不存在并发,只需要一个write可见就行
-    setState(c);
-    return free;
-}
-```
+abstract static class Sync extends AbstractQueuedSynchronizer {
 
-### tryReleaseShared(共享模式)(不支持中断)
-
-因为当前时共享模式,会出现多个线程同时调用,所以tryReleaseShared通过循环规避并发时的CAS操作失败
-
-```text
-protected final boolean tryReleaseShared(int releases) {
-    // 存在并发CAS操作,CAS操作失败后通过不断重试来达到成功
-    for (;;) {
-        int current = getState();
-        int next = current + releases;
-        if (next < current) // overflow
-            throw new Error("Maximum permit count exceeded");
+    final boolean nonfairTryAcquire(int acquires) {
+        final Thread current = Thread.currentThread();
+        int c = getState();
         
-        // 这里使用CAS来设置state,因为是共享模式方法,存在并发
-        if (compareAndSetState(current, next))
+        // 为了体现非公平性,不管同步队列中是否有排队者,直接尝试cas-state来抢占锁资源
+        if (c == 0) {
+            if (compareAndSetState(0, acquires)) {
+                setExclusiveOwnerThread(current);
+                return true;
+            }
+        }
+        else if (current == getExclusiveOwnerThread()) {
+            int nextc = c + acquires;
+            if (nextc < 0) // overflow
+                throw new Error("Maximum lock count exceeded");
+            setState(nextc);
             return true;
+        }
+        return false;
+    }
+
+    protected final boolean tryRelease(int releases) {
+        int c = getState() - releases;
+        if (Thread.currentThread() != getExclusiveOwnerThread())
+            throw new IllegalMonitorStateException();
+        boolean free = false;
+        if (c == 0) {
+            free = true;
+            setExclusiveOwnerThread(null);
+        }
+        setState(c);
+        return free;
+    }
+}
+
+
+nonfairTryAcquire方法可以正直观地实现为:
+final boolean nonfairTryAcquire(int acquires) {
+    final Thread current = Thread.currentThread();
+    int c = getState();
+    
+    // 不管state状态,也不管同步队列中前面的排队者,直接尝试cas-state来抢占锁资源      // 虽然这里看起来更直观,但是不如原代码更高效.原代码可以中额外的(c == 0)判断可以规避c!=0时的盲目cas执行.
+    if (compareAndSetState(0, acquires)) {
+        setExclusiveOwnerThread(current);
+        return true;
+    }
+    
+    // 这里不能省略掉(c != 0),只是用(current == getExclusiveOwnerThread()), 防止锁状态发生异常(即c==0 && current == getExclusiveOwnerThread())
+    if (c != 0 && current == getExclusiveOwnerThread()) {
+        int nextc = c + acquires;
+        if (nextc < 0) // overflow
+            throw new Error("Maximum lock count exceeded");
+        setState(nextc);
+        return true;
+    }
+    
+    return false;
+}
+```
+
+### FairSync
+```text
+static final class FairSync extends Sync {
+
+    // Don't grant access unless recursive call or no waiters or is first.
+    protected final boolean tryAcquire(int acquires) {
+        final Thread current = Thread.currentThread();
+        int c = getState();
+        
+        // 当锁没有持有者,且同步队列没有更早的排队者,才可以尝试cas-state来抢占锁资源(为了FIFO)
+        if (c == 0) {
+            if (!hasQueuedPredecessors() &&
+                compareAndSetState(0, acquires)) {
+                setExclusiveOwnerThread(current);
+                return true;
+            }
+        }
+        else if (current == getExclusiveOwnerThread()) {
+            int nextc = c + acquires;
+            if (nextc < 0)
+                throw new Error("Maximum lock count exceeded");
+            
+            // 因为是互斥锁,当前线程已经持有锁了,可以不用cas-state,只用volatile-write    
+            setState(nextc);
+            return true;
+        }
+        
+        return false;
+    }
+}
+
+为了实现公平,即满足FIFO
+如果c==0,锁没有被持有,除非同步队列没有更早的排队者才能尝试获取锁,这样才能FIFO.
+如果c!=0,锁被线程持有,除非是当前线程持有,否则就在FIFO同步队列中按顺序被唤醒尝试获取锁.
+```
+
+### NonfairSync
+
+```text
+static final class NonfairSync extends Sync {
+
+    protected final boolean tryAcquire(int acquires) {
+        return nonfairTryAcquire(acquires);
     }
 }
 ```
+
