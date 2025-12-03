@@ -117,36 +117,51 @@ public final void await() throws InterruptedException {
 ### await(支持超时+中断)
 
 ```text
-public final boolean await(long time, TimeUnit unit) throws InterruptedException {
-    long nanosTimeout = unit.toNanos(time);
+public final long awaitNanos(long nanosTimeout) throws InterruptedException {
     if (Thread.interrupted())
         throw new InterruptedException();
-        
+    
+     
+    // We don't check for nanosTimeout <= 0L here, to allow awaitNanos(0) as a way to "yield the lock".
+    final long deadline = System.nanoTime() + nanosTimeout;
+    long initialNanos = nanosTimeout;
+    
+    // 当前线程已经获取了锁,同步队列中的线程节点已经移除;现在向条件队列中新增条件节点
     Node node = addConditionWaiter();
     int savedState = fullyRelease(node);
-    final long deadline = System.nanoTime() + nanosTimeout;
-    boolean timedout = false;
     int interruptMode = 0;
     
+    // 等待:其他线程在释放锁时,通过signal方法将本线程节点从条件队列转移到同步队列
     while (!isOnSyncQueue(node)) {
         if (nanosTimeout <= 0L) {
-            timedout = transferAfterCancelledWait(node);
+            // 如果发生超时,主动将线程节点从条件队列转移到同步队列
+            transferAfterCancelledWait(node);
             break;
         }
-        if (nanosTimeout >= spinForTimeoutThreshold)
+        
+        // 通过park(timeout)将当前线程挂起一段时间
+        if (nanosTimeout > SPIN_FOR_TIMEOUT_THRESHOLD)
             LockSupport.parkNanos(this, nanosTimeout);
+        
+        // 如果挂起等待的过程过程发生了中断,主动将线程节点从条件队列转移到同步队列
         if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
             break;
         nanosTimeout = deadline - System.nanoTime();
     }
     
+    // 等到抢到锁资源才能继续执行.
     if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
         interruptMode = REINTERRUPT;
+    // 条件队列的自我管理
     if (node.nextWaiter != null)
         unlinkCancelledWaiters();
+    // 如果支持抛出异常则抛出异常;如果不支持抛出异常则标记中断位
     if (interruptMode != 0)
         reportInterruptAfterWait(interruptMode);
-    return !timedout;
+    
+    // 中断导致等待提前结束,计算提前了多久结束
+    long remaining = deadline - System.nanoTime(); // avoid overflow
+    return (remaining <= initialNanos) ? remaining : Long.MIN_VALUE;
 }
 ```
 
