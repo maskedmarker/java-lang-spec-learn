@@ -1,5 +1,9 @@
 # juc-AQS-总结
 
+AQS的state用来表示锁资源,FIFO队列用来处理排队等待的线程.
+acquire类方法被设计为可能会导致调用方挂起等待;而release类线程则不会导致调用方挂起等待.
+Condition是为独占模式提供的,共享模式不能使用.
+
 ## FIFO队列
 
 ```text
@@ -35,6 +39,17 @@ AQS的条件队列: Node.nextWaiter构成链表,首尾指针是firstWaiter/lastW
 nothing
 ```
 
+### tryAcquire/tryRelease
+```text
+tryAcquire/tryRelease 只能抛出
+IllegalMonitorStateException – if releasing would place this synchronizer in an illegal state. This exception must be thrown in a consistent fashion for synchronization to work correctly.
+UnsupportedOperationException – if exclusive mode is not supported
+
+tryAcquire-Returns:true if successful. Upon success, this object has been acquired.
+tryRelease-Returns:true if this object is now in a fully released state, so that any waiting threads may attempt to acquire; and false otherwise.
+```
+
+
 ## 共享模式
 ```text
 在共享模式下,还是只有第一线程节点能才有尝试抢占锁资源的权力.
@@ -43,11 +58,12 @@ nothing
 ⚠️这个连带唤醒在锁资源耗尽后就停止了,这样避免了锁资源还有而线程未被唤醒的场景.
 ```
 
-## tryAcquire/tryRelease
+### tryAcquireShared/tryReleaseShared
 ```text
-tryAcquire/tryRelease 只能抛出
-IllegalMonitorStateException – if releasing would place this synchronizer in an illegal state. This exception must be thrown in a consistent fashion for synchronization to work correctly.
-UnsupportedOperationException – if exclusive mode is not supported
+只能抛出IllegalMonitorStateException/UnsupportedOperationException
+
+tryAcquireShared-return: in shared mode, a negative value on failure; zero if acquisition but no subsequent acquire can succeed; and a positive value if acquisition and subsequent acquires might also succeed.
+tryReleaseShared-return: true if this release of shared mode may permit a waiting acquire (shared or exclusive) to succeed; and false otherwise
 ```
 
 
