@@ -3,8 +3,22 @@
 
 ## 工具方法
 
+### setHead
 
-#### addWaiter(不支持中断)
+AQS的FIFO同步等待队列是
+    1. 基于prev属性构成的链表的基础数据结构
+    2. 通过移动head指针来控制队头节点出队
+    3. 通过先设置node.prev:=tail再cas-tail来实现队尾入队
+
+```text
+private void setHead(Node node) {
+    head = node;
+    node.thread = null;
+    node.prev = null;
+}
+```
+
+### addWaiter
 
 一定能向同步队列尾部成功插入一个node.(不支持中断)
 
