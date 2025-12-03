@@ -59,6 +59,8 @@ private void doAcquireShared(int arg) {
             cancelAcquire(node); // 锁状态异常后取消等待
     }
 }
+
+// "靠前的n个都有尝试权"中的n无法量化,需要等价转换为 "在锁资源还有剩余的情况下唤醒更多的线程直到锁资源没有剩余".
 ```
 
 ### setHeadAndPropagate
