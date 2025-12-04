@@ -34,6 +34,11 @@ AQS的条件队列: Node.nextWaiter构成链表,首尾指针是firstWaiter/lastW
 7. AQS选择了更加精细的操作,唤醒一个或者部分节点线程.
 ```
 
+
+```text
+🚀🚀🚀🚀要先理解AQS的acquire类操作,release类操作是基于acquire类操作的.
+```
+
 ## 独占模式
 ```text
 nothing
