@@ -93,3 +93,28 @@ The behavior of AbstractQueuedSynchronizer.ConditionObject depends of course on 
 This class provides inspection, instrumentation, and monitoring methods for the internal queue, as well as similar methods for condition objects. 
 These can be exported as desired into classes using an AbstractQueuedSynchronizer for their synchronization mechanics.
 ```
+
+## 接口API
+
+
+
+```text
+tryAcquire :: boolean
+ 返回值为true: 表示抢占锁成功
+返回值为false: 表示抢占锁失败,本线程挂起等待
+
+
+tryRelease :: boolean
+ 返回值为true: 表示锁资源释放成功(其他等待的线程可以去尝试抢占锁资源)  (由于是独占模式,锁资源释放成功也就意味着此时锁资源完全释放)
+返回值为false: 表示锁资源释放失败(其他等待的线程保持继续等待)
+
+
+tryAcquireShared :: int
+返回值为正数:  表示抢占锁成功,且还有剩余的锁资源(其他等待的共享模式线程可以去尝试抢占锁资源)
+  返回值为0:  表示抢占锁成功,且还没有剩余的锁资源(其他等待的线程保持继续等待)
+返回值为负数:  表示抢占锁失败,本线程挂起等待(其他等待的线程保持继续等待)
+
+tryReleaseShared :: boolean
+ 返回值为true: 表示锁资源释放成功(其他等待线程都可以去尝试抢占锁资源)
+返回值为false: 表示锁资源释放失败(其他等待的线程保持继续等待)
+```
