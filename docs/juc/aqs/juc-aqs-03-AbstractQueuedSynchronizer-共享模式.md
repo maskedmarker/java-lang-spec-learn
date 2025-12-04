@@ -38,8 +38,9 @@ private void doAcquireShared(int arg) {
             final Node p = node.predecessor();
             // 💯在共享模式下,还是只有第一线程节点能才有尝试抢占锁资源的权力.(并不是靠前的n个都有尝试权)
             if (p == head) {
-                // 独占模式下,一次tryAcquire可能就会将锁资源占用完;共享模式下,一次tryAcquireShared通常不会占用完
+                // 独占模式下,一次成功的tryAcquire就会将锁资源占用完;共享模式下,一次tryAcquireShared不一定会占用完
                 int r = tryAcquireShared(arg);
+                // r>=0表示本次抢占成功. r==0表示没有剩余资源;r>0表示还有剩余资源,可以唤醒更多的共享模式线程来尝试
                 if (r >= 0) {
                     // 💯通过cascading的级联唤醒形式,来实现类似于靠前的n个都获得尝试权,同时还维持了FIFO的承诺
                     setHeadAndPropagate(node, r);
@@ -83,12 +84,17 @@ private void setHeadAndPropagate(Node node, int propagate) {
         
         Node s = node.next;
         
-        // (s == null)则node此时是尾节点(要防止遗漏可能马上就有的新尾节点);
+        // (s == null)则node此时是尾节点(要防止遗漏可能马上就有的新尾节点,且不知道新尾节点是否是共享节点);
         // 本方法主要是为了实现共享模式下的级联唤醒形式 s.isShared()判断是主体,(s == null)是edge-case
         if (s == null || s.isShared())
             doReleaseShared(); // 唤醒
     }
 }
+
+💯为什么不唤醒独占节点???
+在独占节点和共享节点混合的队列中,
+如果已经有节点(不论共享与独占)获得了锁资源,如果是共享节点获得了所资源,还有剩余的可能;如果是独占节点获得了锁资源,没有剩余的可能.等待中的独占节点即使被唤醒重新执行tryAcquire也是失败的,所以此时不需要唤醒独占节点.
+结论就是,只有共享节点获得了锁资源,才会还有剩余资源的可能.若还有剩余资源,只能唤醒共享节点.
 ```
 
 
