@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc.example;
+package org.example.learn.java.lang.spec.juc.demo;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
