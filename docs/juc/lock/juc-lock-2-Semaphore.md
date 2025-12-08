@@ -69,8 +69,15 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
     // ...
 }
 
-(remaining < 0 || compareAndSetState(available, remaining)) 这个写法非常好,等价于 (remaining < 0 || (remaining >= 0 && compareAndSetState(available, remaining) == true)), 可以省略掉(remaining >= 0)
-即如果remaining小于0 或者当remaining大于等于0且cas-state成功
+💯 (remaining < 0 || compareAndSetState(available, remaining)) 这个写法非常好,且Doug Lea大量使用这种写法,等价于 
+if (remaining < 0) {
+    return remaining;
+} else {
+    if (compareAndSetState(available, remaining)) {
+        return remaining;
+    }
+}
+即如果remaining小于0 或者当remaining大于等于0且cas-state成功,则...
 ```
 
 ### FairSync
