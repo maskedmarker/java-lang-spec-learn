@@ -41,13 +41,13 @@ public class SumTaskTest {
             SumTask right = new SumTask(arr, mid, end);
 
             // 将left子任务交由fork-join线程池的线程来完成
-            left.fork();
+            left.fork(); //📌开辟一条并行的计算链路
 
             // 当前线程完成right子任务
-            long rightResult = right.compute();
+            long rightResult = right.compute(); // 📌继续执行当前的计算链路
 
             // right子任务已经完成,等待left子任务完成后,合并结果
-            long leftResult = left.join();
+            long leftResult = left.join(); // 📌合并并行计算链路的结果
             return leftResult + rightResult;
         }
     }
