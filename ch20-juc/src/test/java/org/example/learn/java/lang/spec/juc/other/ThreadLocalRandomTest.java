@@ -70,4 +70,11 @@ public class ThreadLocalRandomTest {
         boolean randomBool = ThreadLocalRandom.current().nextBoolean();
         System.out.println("随机 boolean: " + randomBool);
     }
+
+    /**
+     * Thread的如下3个属性都是提供给ThreadLocalRandom使用的
+     * Thread.threadLocalRandomSeed
+     * Thread.threadLocalRandomProbe
+     * Thread.threadLocalRandomSecondarySeed
+     */
 }

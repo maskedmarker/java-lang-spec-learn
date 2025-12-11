@@ -6,7 +6,8 @@ import org.junit.Test;
 import java.math.BigInteger;
 
 /**
- *
+ * 对于int类型的位运算符左操作数, 位运算符右操作数为了保证不能大于31,会对位运算符右操作数mod-32
+ * 对于long类型的位运算符左操作数, 位运算符右操作数为了保证不能大于63,会对位运算符右操作数mod-64
  */
 public class BitMoveTest {
 
@@ -20,23 +21,32 @@ public class BitMoveTest {
         byte b6= 0b00100000;
         byte b7= 0b01000000;
 
+        // 左移n,等价于乘以2^n
+        System.out.println("(b1 << 0) = " + (b1 << 0));
         System.out.println("(b1 << 8) = " + (b1 << 8));
         System.out.println("(b2 << 8) = " + (b2 << 8));
         System.out.println("(b6 << 8) = " + (b6 << 8));
         System.out.println("(b7 << 8) = " + (b7 << 8));
 
+        System.out.println("Integer.toBinaryString((b1 << 0)) = " + Integer.toBinaryString((b1 << 0)));
         System.out.println("Integer.toBinaryString((b1 << 8)) = " + Integer.toBinaryString((b1 << 8)));
         System.out.println("Integer.toBinaryString((b2 << 8)) = " + Integer.toBinaryString((b2 << 8)));
         System.out.println("Integer.toBinaryString((b6 << 8)) = " + Integer.toBinaryString((b6 << 8)));
         System.out.println("Integer.toBinaryString((b7 << 8)) = " + Integer.toBinaryString((b7 << 8)));
 
-        // Shift operation '<<' by overly large constant value 32
+        // 📌 对于int类型的位运算符左操作数, 位运算符右操作数为了保证不能大于32,会对位运算符右操作数mod-32
         System.out.println("Integer.toBinaryString(b1 << 31) = " + Integer.toBinaryString(b1 << 31));
         System.out.println("Integer.toBinaryString((b1 << 32)) = " + Integer.toBinaryString((b1 << 32)));
-        System.out.println("Integer.toBinaryString((b1 << 32)) = " + Integer.toBinaryString((b1 << 33)));
-        Assert.assertEquals("shift运算符的右操作数时,等价于先让右操作数mod 32", (b1 << 0), (b1 << (32%32)));
-        Assert.assertEquals("shift运算符的右操作数时,等价于先让右操作数mod 32", (b1 << 1), (b1 << (33%32)));
+        System.out.println("Integer.toBinaryString((b1 << 33)) = " + Integer.toBinaryString((b1 << 33)));
+        Assert.assertEquals("对于int类型的位运算符左操作数, 位运算符右操作数为了保证不能大于32,会对位运算符右操作数mod 32", (b1 << 0), (b1 << (32%32)));
+        Assert.assertEquals("对于int类型的位运算符左操作数, 位运算符右操作数为了保证不能大于32,会对位运算符右操作数mod 32", (b1 << 1), (b1 << (33%32)));
         System.out.println("Integer.toBinaryString((b1 << 32)) = " + Integer.toBinaryString(((b1 << 31) << 3)));
+
+        // 📌 对于long类型的位运算符左操作数, 位运算符右操作数为了保证不能大于64,会对位运算符右操作数mod-64
+        long l = 0b00000001;
+        System.out.println("Long.toBinaryString((l << 32)) = " + Long.toBinaryString((l << 32)));
+        Assert.assertNotEquals((b1 << 32), (l << 32));
+        Assert.assertEquals((b1 << 0), (l << 64));
     }
 
     /**
@@ -73,7 +83,7 @@ public class BitMoveTest {
         int TIDYING    =  2 << COUNT_BITS;
         int TERMINATED =  3 << COUNT_BITS;
 
-        System.out.println("Integer.toBinaryString(CAPACITY) = " + Integer.toBinaryString(CAPACITY));
+        System.out.println("Integer.toBinaryString(CAPACITY) = " + Integer.toBinaryString(CAPACITY)); //000_11111111111111111111111111111
         System.out.println("Integer.toBinaryString(RUNNING) = " + Integer.toBinaryString(RUNNING)); // 111_00000000000000000000000000000
         System.out.println("Integer.toBinaryString(SHUTDOWN) = " + Integer.toBinaryString(SHUTDOWN)); // 000_00000000000000000000000000000
         System.out.println("Integer.toBinaryString(STOP) = " + Integer.toBinaryString(STOP)); // 001_00000000000000000000000000000
