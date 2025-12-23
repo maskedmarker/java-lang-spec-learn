@@ -62,19 +62,17 @@ public <T> ForkJoinTask<T> submit(Callable<T> task) {
 通过CAS设置runState的最低位来锁定ForkJoinPool的运行状态.
 锁定失败的话,等待.
 
+只有lockRunState/unlockRunState能修改runState,其他方法只能读runState;lockRunState设置锁bit,unlockRunState清除锁bit.
+且lockRunState/unlockRunState成对使用.
+
 如下方法会使用到lockRunState
-tryAddWorker
-registerWorker
-deregisterWorker
-tryCompensate
-tryTerminate
-externalSubmit
+tryAddWorker registerWorker deregisterWorker tryCompensate tryTerminate externalSubmit
 
 ```text
 private int lockRunState() {
     int rs;
     
-    // 因为要判断某个bit位,所以无法无脑cas(specified-value, new-value),只能先if再cas
+    // 一定要先判定lock-bit位是否没有加锁,然后才能cas(old-value, old-value |= RSLOCK),否则就等于是抢了其他线程已经持有的锁,违反了锁的不可抢占性.
     return ((((rs = runState) & RSLOCK) != 0 ||
              !U.compareAndSwapInt(this, RUNSTATE, rs, rs |= RSLOCK)) ?
             awaitRunStateLock() : rs);
@@ -91,72 +89,101 @@ private int lockRunState() {
             return rs;
         }
     }
+    
+    // 锁已经被持有,就需要等待
     return awaitRunStateLock();
 }
 ```
 
+### unlockRunState
 
-### awaitRunStateLock
+lockRunState/unlockRunState的设计意图是,先使用cas实现持有锁＋cas自旋等待,降低使用monitor锁的概率.
+
+lockRunState/unlockRunState成对使用的范式如下
+```text
+int rs = lockRunState();  // 返回加锁前的runState,runState的0th-bit有设置(即locked),但是1st-bit没有设置是未知的(可能携带signal,也可能没有)
+exe_code_in_critical_section;
+unlockRunState(rs, rs & ~RSLOCK);
+```
+
+
+怎么挂起要看怎么唤醒.
+
+只有lockRunState/unlockRunState能修改runState,其他方法只能读runState.
+且lockRunState/unlockRunState成对使用.
+
+```text
+private void unlockRunState(int oldRunState, int newRunState) {
+    if (!U.compareAndSwapInt(this, RUNSTATE, oldRunState, newRunState)) {  // cas操作失败只可能是oldRunState缺少signal位,最新的runState被设置了signal,.(如果没有发生wait,就不会触发cpu开销比较大的notify操作)
+        Object lock = stealCounter;
+        runState = newRunState;              // cas操作失败证明oldRunState有lock位缺少signal位, newRunState=(oldRunState & ~RSLOCK)即而和lock位,所以此时newRunState可以成为runState的新值
+        if (lock != null)
+            synchronized (lock) { lock.notifyAll(); }  // runState被设置了signal,证明有线程需要唤醒  (因为fork-join的任务可以被steal,使用notifyAll而非notify是为了让更多工作线程恢复调度,能更充分利用cpu的并行能力)
+    }
+}
+```
+
+
+#### awaitRunStateLock
 
 Spins and/or blocks until runstate lock is available. See above for explanation.
+awaitRunStateLock是lockRunState的专属方法,仅仅是为了保持逻辑清晰才被提取到一个独立方法中,不会被其他方法使用
 
 ```text
 // 返回值为CAS-runState时的原值
 private int awaitRunStateLock() {
     Object lock;
     boolean wasInterrupted = false;
+    
+    // 先自旋等待(支持自旋模式),然后挂起等待(这就是所谓的adaptive自适应锁)
     for (int spins = SPINS, r = 0, rs, ns;;) {
-        // 只有当((runState & RSLOCK) == 0)时才cas尝试抢占锁 (因为判断的某个bit位,所以无法无脑cas(specified-value, new-value))
+        // 只在每个循环的开始处读取一个runState
         if (((rs = runState) & RSLOCK) == 0) {
-            if (U.compareAndSwapInt(this, RUNSTATE, rs, ns = rs | RSLOCK)) {
+            if (U.compareAndSwapInt(this, RUNSTATE, rs, ns = rs | RSLOCK)) {  // 只有当lock-bit位显示锁已经释放了,才能cas尝试抢锁
                 if (wasInterrupted) {
                     try {
                         Thread.currentThread().interrupt();
                     } catch (SecurityException ignore) {
                     }
                 }
-                return ns;
+                return ns; // rs未携带lock位,那么rs要么读取到初始值(未携带signal位),要么读取到首次unlockRunState设置的值(也未携带signal),如此后续ns会保持一直未携带signal
             }
         }
         
-//        else if (r == 0)                               // 当前和下个else-if都是为了生成随机数r,结果随机数r并没有被使用(r应该是预留的)
-//            r = ThreadLocalRandom.nextSecondarySeed();
-//        else if (spins > 0) {
-//            r ^= r << 6; r ^= r >>> 21; r ^= r << 7;  // 伪随机数生成器中的核心运算
-//            if (r >= 0)
-//                --spins;
-//        }
+        // 当前和下个else-if都用于生成随机数r(没有使用),同时生成随机数消耗了cpu时间,达到了自旋等待
+        else if (r == 0)                               
+            r = ThreadLocalRandom.nextSecondarySeed();
+        else if (spins > 0) {
+            r ^= r << 6; r ^= r >>> 21; r ^= r << 7;  // 伪随机数生成器中的核心运算
+            if (r >= 0)
+                --spins;
+        }
         
         // 因为awaitRunStateLock方法依赖stealCounter的monitor,所以要等待ForkJoinPool初始完成   (外部线程首次提交任务时触发初始化过程((runState & RSLOCK) != 0)以及分配stealCounter)
         else if ((rs & STARTED) == 0 || (lock = stealCounter) == null)      
             Thread.yield();
         
         // ForkJoinPool初始已完成,且已经被其他线程占有了ForkJoinPool的锁
-        else if (U.compareAndSwapInt(this, RUNSTATE, rs, rs | RSIGNAL)) {   // 竞争锁失败后,在runState上设置需要被唤醒的标识 (多个lockRunState可以并发执行,但通过循环重试后依次完成cas)
-            synchronized (lock) {                                           // (stealCounter被当作runState的monitor锁)
-                if ((runState & RSIGNAL) != 0) {                            // 再次检查runState
+        else if (U.compareAndSwapInt(this, RUNSTATE, rs, rs | RSIGNAL)) {   // 多个lockRunState可以并发执行,但通过循环重试后依次完成cas
+            synchronized (lock) {                                           
+                if ((runState & RSIGNAL) != 0) {                            // 从cas-runState-RSIGNAL到获取lock的monitor之间有时间间隙,这个时间间隙内runState会发生变化(比如unlockRunState抢先一步执行了)
                     try {
-                        lock.wait();
+                        lock.wait();                                        // 自旋等待后,锁还没有释放,就通过monitor机制挂起等待. 
                     } catch (InterruptedException ie) {
                         if (!(Thread.currentThread() instanceof ForkJoinWorkerThread))
                             wasInterrupted = true;
                     }
                 }
                 else
-                    lock.notifyAll();
+                    lock.notifyAll();   // else可以删除,因为有lock的monitor锁的互斥性不会有遗漏notify的情况.
             }
         }
     }
 }
+
+lockRunState/unlockRunState成对使用.
+一个unlockRunState会唤醒所有抢锁的线程,但是一个线程能成功cas成功,其他的线程又会因为抢锁失败进入wait等待.
+
+synchronized (lock)代码块没有使用while-wait,因为synchronized (lock)代码块外层有一个类似与while(true)的for循环.同时此处不用while可以实现wait+自旋混合式的等待.
 ```
 
-```text
-private void unlockRunState(int oldRunState, int newRunState) {
-    if (!U.compareAndSwapInt(this, RUNSTATE, oldRunState, newRunState)) {
-        Object lock = stealCounter;
-        runState = newRunState;              // clears RSIGNAL bit
-        if (lock != null)
-            synchronized (lock) { lock.notifyAll(); }
-    }
-}
-```

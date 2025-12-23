@@ -29,7 +29,7 @@ private static final int  STOP       = 1 << 29;    // Terminating 注意ing
 private static final int  TERMINATED = 1 << 30;    // Terminated
 private static final int  SHUTDOWN   = 1 << 31;    // Shutting down
 
-
+只有lockRunState/unlockRunState能修改runState,其他方法只能读runState
 ```
 
 
@@ -587,6 +587,8 @@ private boolean awaitWork(WorkQueue w, int r) {
     
     // 进入awaitWork前,当前线程已经将w.scanState设置为inactive
     
+    
+    // 在循环中等待任务到来,先自旋后挂起
     for (int pred = w.stackPred, spins = SPINS, ss;;) {
         if ((ss = w.scanState) >= 0)   // 循环等待的出口是被tryRelease唤醒
             break;
@@ -667,55 +669,172 @@ private boolean tryRelease(long c, WorkQueue v, long inc) {
 }
 ```
 
+## awaitJoin
+
+Helps and/or blocks until the given task is done or timeout.
+
+```text
+final int awaitJoin(WorkQueue w, ForkJoinTask<?> task, long deadline) {
+    int s = 0;
+    if (task != null && w != null) {
+        ForkJoinTask<?> prevJoin = w.currentJoin;
+        U.putOrderedObject(w, QCURRENTJOIN, task);
+        CountedCompleter<?> cc = (task instanceof CountedCompleter) ? (CountedCompleter<?>)task : null;
+        
+        for (;;) {
+            if ((s = task.status) < 0)
+                break;
+            if (cc != null)
+                helpComplete(w, cc, 0);                             // 避免等待线程干等task不利用cpu并行能力,如果task是CountedCompleter,执行task或其祖先任务,加速task结束
+            else if (w.base == w.top || w.tryRemoveAndExec(task))
+                helpStealer(w, task);                               // 避免等待线程干等task不利用cpu并行能力,在task结束前,随机找一个工作队列,执行其任务
+            if ((s = task.status) < 0)
+                break;
+            long ms, ns;
+            if (deadline == 0L)
+                ms = 0L;
+            else if ((ns = deadline - System.nanoTime()) <= 0L)
+                break;
+            else if ((ms = TimeUnit.NANOSECONDS.toMillis(ns)) <= 0L)
+                ms = 1L;
+            if (tryCompensate(w)) {
+                task.internalWait(ms);
+                U.getAndAddLong(this, CTL, AC_UNIT);
+            }
+        }
+        U.putOrderedObject(w, QCURRENTJOIN, prevJoin);
+    }
+    return s;
+}
+```
+
+调用awaitJoin的方法为如下:
+```text
+private int doJoin() {
+    int s; Thread t; ForkJoinWorkerThread wt; ForkJoinPool.WorkQueue w;
+    if((t = Thread.currentThread()) instanceof ForkJoinWorkerThread){
+        if((w = (wt = (ForkJoinWorkerThread)t).workQueue).tryUnpush(this) && (s = doExec()) < 0){
+            return s;
+        } else {
+            return wt.pool.awaitJoin(w, this, 0L)
+        }
+    }else {
+            return externalAwaitDone();
+    }	
+}
+
+private int doInvoke() {
+    int s; Thread t; ForkJoinWorkerThread wt;       
+    if(s = doExec()) < 0) {
+        return s;    
+    } else {
+        if ((t = Thread.currentThread()) instanceof ForkJoinWorkerThread) {
+            return (wt = (ForkJoinWorkerThread)t).pool.awaitJoin(wt.workQueue, this, 0L);
+        } else {
+            return externalAwaitDone();
+        }
+    }
+}
+
+public final V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {      
+    int s;
+    long nanos = unit.toNanos(timeout);
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    if ((s = status) >= 0 && nanos > 0L) {
+        long d = System.nanoTime() + nanos;
+        long deadline = (d == 0L) ? 1L : d; // avoid 0
+        Thread t = Thread.currentThread();
+        if (t instanceof ForkJoinWorkerThread) {
+            ForkJoinWorkerThread wt = (ForkJoinWorkerThread)t;
+            s = wt.pool.awaitJoin(wt.workQueue, this, deadline);
+        }
+    //....    
+}  
+```
+
 ## 线程池管理
 
+### shutdown
+
+Possibly initiates an orderly shutdown in which previously submitted tasks are executed, but no new tasks will be accepted.
+no additional effect if already shut down. 
+Tasks that are in the process of being submitted concurrently during the course of this method may or may not be rejected.
+
+```text
+public void shutdown() {
+    tryTerminate(false, true); // now==false; enable==true
+}
+```
+
 ### tryTerminate
+
+Possibly initiates and/or completes termination.
+
+Params:
+    now – if true, unconditionally terminate, else only if no work and no active workers   (true表示立即终止，false表示尝试终止)
+    enable – if true, enable shutdown when next possible                                   (可以尝试推进到SHUTDOWN阶段)
+Returns:
+    true if now terminating or terminated
+
+// tryTerminate有3 phases: SHUTDOWN, STOP, then TERMINATE
+
+
+tryTerminate不是“发起关闭”,而是: 在 shutdown / shutdownNow / worker 退出 / steal 失败 等多个路径中,反复被调用,尝试推进池的终止状态机
+👉 它是一个 “推进式终止器（termination progressor）”
 
 ```text
 private boolean tryTerminate(boolean now, boolean enable) {
     int rs;
-    // 作为fork-join框架的默认线程池,ForkJoinPool.common不能关闭
+    // 作为fork-join框架的默认线程池,ForkJoinPool.common不能被关闭💯
     if (this == common)                       
         return false;
     
     if ((rs = runState) >= 0) {
         if (!enable)
-            return false;
-        rs = lockRunState();                  // enter SHUTDOWN phase
-        unlockRunState(rs, (rs & ~RSLOCK) | SHUTDOWN);
+            return false;   // 如果enable为false,发现当前ForkJoinPool还未进入SHUTDOWN阶段,直接放弃.
+        
+        rs = lockRunState();                  
+        unlockRunState(rs, (rs & ~RSLOCK) | SHUTDOWN); // 设置runState表明进入SHUTDOWN阶段
     }
 
-    if ((rs & STOP) == 0) {
+    if ((rs & STOP) == 0) {                                            // STOP=(1<<29)
         if (!now) {                           // check quiescence
+            
+            // 进入SHUTDOWN阶段:不再接受外部任务,但允许已提交任务完成
             for (long oldSum = 0L;;) {        // repeat until stable
                 WorkQueue[] ws; WorkQueue w; int m, b; long c;
                 long checkSum = ctl;
                 if ((int)(checkSum >> AC_SHIFT) + (config & SMASK) > 0)
                     return false;             // still active workers
                 if ((ws = workQueues) == null || (m = ws.length - 1) <= 0)
-                    break;                    // check queues
+                    break;                    // 特例:因为未提交过任务而未初始化
+                
                 for (int i = 0; i <= m; ++i) {
                     if ((w = ws[i]) != null) {
                         if ((b = w.base) != w.top || w.scanState >= 0 ||
                             w.currentSteal != null) {
-                            tryRelease(c = ctl, ws[m & (int)c], AC_UNIT);
-                            return false;     // arrange for recheck
+                            tryRelease(c = ctl, ws[m & (int)c], AC_UNIT);  // 发现工作队列还有任务,唤醒因无任务而挂起等待的工作线程,加快任务执行速度.
+                            return false;                                  
                         }
                         checkSum += b;
-                        if ((i & 1) == 0)
-                            w.qlock = -1;     // try to disable external
+                        if ((i & 1) == 0)     // 共享队列是偶数的
+                            w.qlock = -1;     // 共享队列的qlock设置为-1,外部就无法再提交任务了
                     }
                 }
-                if (oldSum == (oldSum = checkSum))
-                    break;
+                if (oldSum == (oldSum = checkSum))  // checkSum由ctl/base叠加而来
+                    break;                          // 此时无活跃工作线程,而且base也不再变化,意味着无待执行的工作任务
             }
         }
+        
+        // 当工作线程进入不活跃后,完成shutdown阶段,进入stop阶段
         if ((runState & STOP) == 0) {
-            rs = lockRunState();              // enter STOP phase
-            unlockRunState(rs, (rs & ~RSLOCK) | STOP);
+            rs = lockRunState();              
+            unlockRunState(rs, (rs & ~RSLOCK) | STOP);  // enter STOP phase
         }
     }
 
+    // 进入STOP阶段:中断工作线程,让工作线程结束
     int pass = 0;                             // 3 passes to help terminate
     for (long oldSum = 0L;;) {                // or until done or stable
         WorkQueue[] ws; WorkQueue w; ForkJoinWorkerThread wt; int m;
@@ -729,21 +848,22 @@ private boolean tryTerminate(boolean now, boolean enable) {
             }
             break;
         }
+        
         for (int i = 0; i <= m; ++i) {
             if ((w = ws[i]) != null) {
                 checkSum += w.base;
-                w.qlock = -1;                 // try to disable
+                w.qlock = -1;                 // 标注工作队列结束
                 if (pass > 0) {
-                    w.cancelAll();            // clear queue
+                    w.cancelAll();                                   // 将工作队列中待执行的任务取消达(兜底)
                     if (pass > 1 && (wt = w.owner) != null) {
                         if (!wt.isInterrupted()) {
                             try {             // unblock join
-                                wt.interrupt();
+                                wt.interrupt();                       // 中断工作线程
                             } catch (Throwable ignore) {
                             }
                         }
                         if (w.scanState < 0)
-                            U.unpark(wt);     // wake up
+                            U.unpark(wt);     // 非活跃线程恢复变活跃后,会看到工作队列结束了,之后工作线程正常退出.
                     }
                 }
             }
@@ -757,7 +877,7 @@ private boolean tryTerminate(boolean now, boolean enable) {
         else if (++pass > 1) {                // try to dequeue
             long c; int j = 0, sp;            // bound attempts
             while (j++ <= m && (sp = (int)(c = ctl)) != 0)
-                tryRelease(c, ws[sp & m], AC_UNIT);
+                tryRelease(c, ws[sp & m], AC_UNIT); // 非活跃线程恢复变活跃后才能正常退出
         }
     }
     return true;

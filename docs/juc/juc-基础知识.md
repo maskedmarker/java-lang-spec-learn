@@ -84,23 +84,82 @@
 ```text
 double-check
 
-public void doFoo() {
-   
-   if(condition) {
-       acquire(lock){
-          if
-       }
-   }
+// 通用的模板
+public void doFoo1() {
+   acquire(lock){   // 在抢到锁以前需要等待                                  
+      while(biz-condition-is-not-satisfied){            
+            release-lock-and-wait;                        // 等待条件满足,否者无限期等待(依赖其他线程在条件满足时唤醒当前线程)
+      }
+      execute-code-in-critical-section;
+   }  // 这里释放锁
+}
 
+public void doFoo2() {
+   acquire(lock){                               
+      while(biz-condition-is-not-satisfied){            
+            release-lock-and-waitWithTimeout;             // 等待条件满足,否者无限期等待(因为有超时机制,不依赖其他线程在条件满足时的唤醒,当前线程可以在超时后主动检测条件是否满足)
+      }
+      execute-code-in-critical-section;
+   }
+}
+
+public void doFoo3() {
+   if(biz-condition-is-satisfied) {                         // ①
+       acquire(lock){                                       // ②
+          if(biz-condition-is-not-satisfied){               // ①②之间是有执行空隙的,在这个空隙biz-condition会发生变化,所以需要二次检查biz-condition
+                execute-code-in-critical-section;
+          } else {
+                do-other;                                   // 在有选择权的时候,可以不用无限期等待条件满足;加锁仅仅是为原子操作
+          }
+       }
+   } else {
+       do-other;                                            // 在有选择权的时候,可以不用无限期等待条件满足
+   }
 }
 
 
-public void doFoo() {
-   int s;
-   if((s= status) == condition && cas(s, newStatus)) {  // 这里的[(s= status) == condition]用来检测是否满足可以尝试cas的条件(如果少了检测直接无脑cas,也就意味着不管当前是否有人持有锁, 就违反了不可抢占性)
-       if((s= status) == condition){
-          LockSupport.park();
-       }
+// monitor实现
+public void doFoo1() {
+   synchronized(lock){                    
+      while(biz-condition-is-not-satisfied){            
+            lock.wait();                        
+      }
+      execute-code-in-critical-section;
+   } 
+}
+
+public void doFoo2() {
+   synchronized(lock){                       
+      while(biz-condition-is-not-satisfied){            
+            lock.wait(timeout);
+      }
+      execute-code-in-critical-section;
    }
+}
+
+public void doFoo3() {
+   if(biz-condition-is-satisfied) {
+       synchronized(lock){
+          if(biz-condition-is-not-satisfied){
+                execute-code-in-critical-section;
+          } else {
+                do-other;                                   
+          }
+       }
+   } else {
+       do-other;                                            
+   }
+}
+
+
+// cas的实现
+如果想通过cas来实现doFoo1/doFoo2中的锁机制,最后实现的锁机制大致等价于不支持取消操作的AQS;
+
+public void doFoo3() {
+    if (lockStatus == unlocked && cas(lockStatus, locked)) {  //  防止违反了锁的不可抢占性: 先(lockStatus == unlocked)来检查锁没有被持有,然后才能通过cas(status_unlocked, locked)来占有锁
+        execute-code-in-critical-section;
+    } else {
+        do-other;
+    }
 }
 ```
