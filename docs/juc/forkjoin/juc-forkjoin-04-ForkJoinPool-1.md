@@ -161,6 +161,42 @@ public <T> ForkJoinTask<T> submit(Callable<T> task) {
 }
 ```
 
+## externalPush
+
+```text
+final void externalPush(ForkJoinTask<?> task) {
+    WorkQueue[] ws; WorkQueue q; int m;
+    int r = ThreadLocalRandom.getProbe();
+    int rs = runState;
+    
+    // 提交任务的fast-path
+    if ((ws = workQueues) != null && (m = (ws.length - 1)) >= 0 &&      // 如果ForkJoinPool已经初始化
+        (q = ws[m & r & SQMASK]) != null && r != 0 && rs > 0 &&         // 且随机到了一个共享队列(偶数索引) 且ForkJoinPool没有处于关闭流程中
+        
+        U.compareAndSwapInt(q, QLOCK, 0, 1)) {                          // 对工作队列加锁成功
+        
+        ForkJoinTask<?>[] a; int am, n, s;
+        if ((a = q.array) != null &&
+            (am = a.length - 1) > (n = (s = q.top) - q.base)) {         // 队列中任务数大于一(降低与steal操作的并发)
+            
+            int j = ((am & s) << ASHIFT) + ABASE;                       // 计算数组的top索引的地址偏移量
+            U.putOrderedObject(a, j, task);                             // 使用native方法,在数组的top处添加一个元素
+            
+            U.putOrderedInt(q, QTOP, s + 1);                            // 队列的top++
+            
+            U.putIntVolatile(q, QLOCK, 0);                              // 对工作队列解锁
+            
+            if (n <= 1)                                                 // 之前队列中任务基本处理完了(小于等于1时),工作队列的工作线程线程很可能已经因为没有任务而挂起等待了,现在又有新任务了,需要尝试唤醒它
+                signalWork(ws, q);
+            return;
+        }
+        
+        U.compareAndSwapInt(q, QLOCK, 1, 0);                            // 对工作队列解锁
+    }
+    
+    externalSubmit(task);    // 其他场景使用完整版的提交方法
+}
+```
 
 ## externalSubmit
 
