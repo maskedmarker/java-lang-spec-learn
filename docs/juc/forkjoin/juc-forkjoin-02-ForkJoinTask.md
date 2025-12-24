@@ -60,7 +60,20 @@ volatile int status; // accessed directly by pool and workers  初始值为0; st
 ## 执行链路
 
 
+## fork
 
+向工作队列中提交当前任务(this)
+
+```text
+public final ForkJoinTask<V> fork() {
+    Thread t;
+    if ((t = Thread.currentThread()) instanceof ForkJoinWorkerThread)
+        ((ForkJoinWorkerThread)t).workQueue.push(this);  // 提交到当前工作线程所在的工作队列
+    else
+        ForkJoinPool.common.externalPush(this);         // 通常fork发生在ForkJoinTask.exec()方法中,这里给了兜底保护.
+    return this;
+}
+```
 
 ## join
 
