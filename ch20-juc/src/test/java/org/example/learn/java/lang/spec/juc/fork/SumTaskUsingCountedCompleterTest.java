@@ -11,7 +11,7 @@ import java.util.stream.IntStream;
 
 public class SumTaskUsingCountedCompleterTest {
 
-    static public class SumTask extends CountedCompleter<Long> {
+    static public class SumTask extends CountedCompleter<Void> {
         private static final int THRESHOLD = 1000; // 拆分阈值
 
         private final int[] array;
@@ -55,13 +55,15 @@ public class SumTaskUsingCountedCompleterTest {
     public void test0() {
         int[] arr = new int[1_000_000];
         Arrays.fill(arr, 1);
+        int expectedSum = IntStream.of(arr).sum();
+        System.out.println("expectedSum = " + expectedSum);
 
         AtomicLong totalSum = new AtomicLong(0);
         ForkJoinPool pool = ForkJoinPool.commonPool();
 
         pool.invoke(new SumTask(null, arr, 0, arr.length, totalSum));
         System.out.println("result = " + totalSum);
-        Assert.assertEquals((arr.length), totalSum.longValue());
+        Assert.assertEquals(expectedSum, totalSum.longValue());
     }
 
 
