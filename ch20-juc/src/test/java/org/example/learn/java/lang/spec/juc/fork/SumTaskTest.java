@@ -1,10 +1,12 @@
 package org.example.learn.java.lang.spec.juc.fork;
 
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveTask;
+import java.util.stream.IntStream;
 
 public class SumTaskTest {
 
@@ -60,5 +62,6 @@ public class SumTaskTest {
         ForkJoinPool pool = new ForkJoinPool();
         Long result = pool.invoke(new SumTask(arr, 0, arr.length));
         System.out.println("result = " + result);
+        Assert.assertEquals((arr.length), result.longValue());
     }
 }
