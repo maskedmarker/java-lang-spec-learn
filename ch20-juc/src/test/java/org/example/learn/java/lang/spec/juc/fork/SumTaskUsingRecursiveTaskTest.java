@@ -6,9 +6,9 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveTask;
-import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
-public class SumTaskTest {
+public class SumTaskUsingRecursiveTaskTest {
 
     class SumTask extends RecursiveTask<Long> {
         private final long[] arr;
@@ -58,10 +58,11 @@ public class SumTaskTest {
     public void test0() {
         long[] arr = new long[10_000_000];
         Arrays.fill(arr, 1);
+        long expectedSum = LongStream.of(arr).sum();
 
         ForkJoinPool pool = new ForkJoinPool();
         Long result = pool.invoke(new SumTask(arr, 0, arr.length));
         System.out.println("result = " + result);
-        Assert.assertEquals((arr.length), result.longValue());
+        Assert.assertEquals(expectedSum, result.longValue());
     }
 }
