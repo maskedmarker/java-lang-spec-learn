@@ -11,77 +11,65 @@ import java.util.stream.IntStream;
 
 public class SumTaskUsingCountedCompleterTest2 {
 
-    private static final int THRESHOLD = 10; // 拆分阈值
+    static public class SumTask extends CountedCompleter<Void> {
+        private static final int THRESHOLD = 1000; // 拆分阈值
 
-    static class SumTask extends CountedCompleter<Long> {
-        final int[] array;
-        final int start, end;  // [start,edn)闭开区间
-        final AtomicLong localSum = new AtomicLong();  // 当前任务计算的求和值
-        SumTask left, right;
+        private final int[] array;
+        private final int start;
+        private final int end;
+        private final AtomicLong totalSum; // 用于存储最终结果
 
-        SumTask(CountedCompleter<?> parent, int[] array, int start, int end) {
-            super(parent);
+        public SumTask(CountedCompleter<?> completer, int[] array, int start, int end, AtomicLong totalSum) {
+            super(completer);
             this.array = array;
             this.start = start;
             this.end = end;
+            this.totalSum = totalSum;
         }
 
         @Override
         public void compute() {
-            if (end - start <= THRESHOLD) {
+            int length = end - start;
+            if (length <= THRESHOLD) {  // 到达阈值，直接计算
                 long sum = 0;
-                for (int i = start; i < end; i++){
+                for (int i = start; i < end; i++) {
                     sum += array[i];
                 }
-                localSum.addAndGet(sum);
+                totalSum.addAndGet(sum);  // 将局部结果累加到共享结果中
+
+                propagateCompletion();   // 尝试传播完成信号 //因为不需要onCompletion合并结果,所以可以用propagateCompletion代替tryComplete
             } else {
                 int mid = (start + end) >>> 1;
-                setPendingCount(2);
-                left = new SumTask(this, array, start, mid);
-                right = new SumTask(this, array, mid, end);
-                left.fork();
-                right.fork();
+
+                addToPendingCount(1);  // 设置待完成的子任务数量（本例中为1个右侧任务, 当前线程继续处理左侧子任务）
+                new SumTask(this, array, mid, end, totalSum).fork(); // 启动右侧子任务
+
+                new SumTask(this, array, start, mid, totalSum).compute();   // 节省线程切换开销
             }
-
-            tryComplete();
-        }
-
-        /**
-         * 判断是否是叶子节点不能使用(caller != this)
-         * onCompletion的入参caller可能是任务自己也可能是子任务:
-         *      当父任务先执行了tryComplete时,caller就是任务自己
-         *      当子任务先执行了tryComplete时,caller就是任务的子任务
-         *  onCompletion的入参caller仅仅表示导致任务完成的最后一位贡献者(任务本体及其子任务都是贡献值)
-         */
-        @Override
-        public void onCompletion(CountedCompleter<?> caller) {
-            // 非叶子节点才可能需要合并子任务的结果
-            if (left != null && right != null) {
-                localSum.addAndGet(left.localSum.get());
-                localSum.addAndGet(right.localSum.get());
-            }
-        }
-
-        @Override
-        public Long getRawResult() {
-            return localSum.get();
         }
     }
 
+
+
     @Test
     public void test0() {
-        int[] arr = new int[100];
+        int[] arr = new int[1_000_000];
         Arrays.fill(arr, 1);
         int expectedSum = IntStream.of(arr).sum();
         System.out.println("expectedSum = " + expectedSum);
 
+        AtomicLong totalSum = new AtomicLong(0);
         ForkJoinPool pool = ForkJoinPool.commonPool();
-        SumTask rootTask = new SumTask(null, arr, 0, arr.length);
-        Long result = pool.invoke(rootTask);
-        System.out.println("result = " + result);
-        Assert.assertEquals(expectedSum, result.longValue());
+
+        pool.invoke(new SumTask(null, arr, 0, arr.length, totalSum));
+        System.out.println("result = " + totalSum);
+        Assert.assertEquals(expectedSum, totalSum.longValue());
     }
 
+
+    /**
+     * 多次重复执行,降低误判的概率
+     */
     @Test
     public void test01() {
         int[] arr = new int[10000];
@@ -96,10 +84,11 @@ public class SumTaskUsingCountedCompleterTest2 {
     }
 
     public void doTest(ForkJoinPool pool, int[] arr, int expectedSum) {
-        SumTask rootTask = new SumTask(null, arr, 0, arr.length);
-        Long result = pool.invoke(rootTask);
-        if (expectedSum != result) {
-            System.out.printf("expectedSum=%d, result = %d\n", expectedSum, result);
+        AtomicLong totalSum = new AtomicLong(0);
+        SumTask rootTask = new SumTask(null, arr, 0, arr.length, totalSum);
+        pool.invoke(rootTask);
+        if (expectedSum != totalSum.get()) {
+            System.out.printf("expectedSum=%d, totalSum = %d\n", expectedSum, totalSum.get());
             System.exit(-1);
         }
     }
@@ -107,13 +96,13 @@ public class SumTaskUsingCountedCompleterTest2 {
     @Test
     public void test1() {
         int lo = 0;
-        int hi = 100;
+        int hi = 10_000_000;
 
         do{
             int mid = (lo + hi) >>> 1;
             System.out.printf("[%d %d) [%d %d)\n", lo, mid, mid, hi);
 
             hi = mid;
-        } while(hi - lo > THRESHOLD);
+        } while(hi - lo > 1000);
     }
 }
