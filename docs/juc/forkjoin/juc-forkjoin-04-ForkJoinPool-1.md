@@ -1,11 +1,9 @@
 # juc-forkjoin-ForkJoinPool
 
 
-## javadoc描述
+ForkJoinPool的任务要么待执行在WorkQueue中保存着,要么正在被执行而从WorkQueue移出处于方法栈中保存着.💯💯💯
+提交任务不用submit而用fork;join并非真正的直接挂起等待,而是去帮助被join任务了.
 
-```text
-
-```
 
 
 ## 关键字段
@@ -709,31 +707,52 @@ private boolean tryRelease(long c, WorkQueue v, long inc) {
 
 Helps and/or blocks until the given task is done or timeout.
 
+awaitJoin方法名中有await单词,但是该方法并不是真让当前线程挂起等待,这样cpu的并行能力就得不到充分利用.
+其次awaitJoin调用方是因为被调用方任务没有完成导致调用方任务无法进一步执行,所以核心点并不是调用方线程是否要挂起,只要调用方线程在被调用任务完成前不进一步执行调用方任务就行.
+
+fork-join结构化范式中,当前线程刚fork/submit到自己工作队列中的新任务task被其他线程steal,现在当前工作线程只能等待task完成.
+当前工作线程的"等待"
+    可以是什么都不做:挂起
+    也可以是帮助task尽快完成
+
+当工作线程 w 在 join 一个 ForkJoinTask 时,在真正阻塞(park/wait)之前,尽一切可能主动推进该任务的完成;只有在“无法再推进”时,才允许线程进入等待态,并通过补偿机制维持池的并行度.
+
+awaitJoin 是 ForkJoinPool 中 join 语义的“安全阀”：它在阻塞前通过 completion 推进与偷取协助最大化前进机会，并通过补偿机制保证即使发生阻塞也不会导致池内并行度塌陷或死锁
+
 ```text
 final int awaitJoin(WorkQueue w, ForkJoinTask<?> task, long deadline) {
     int s = 0;
     if (task != null && w != null) {
         ForkJoinTask<?> prevJoin = w.currentJoin;
-        U.putOrderedObject(w, QCURRENTJOIN, task);
-        CountedCompleter<?> cc = (task instanceof CountedCompleter) ? (CountedCompleter<?>)task : null;
+        U.putOrderedObject(w, QCURRENTJOIN, task);  // 表示当前worker正在等待的任务,currentSteal的用途请看helpStealer
         
+        CountedCompleter<?> cc = (task instanceof CountedCompleter) ? (CountedCompleter<?>)task : null;  // CountedCompleter使用completion推进协议;普通ForkJoinTask使用steal/helpJoin协议
+        
+        // 任务结束或者等待时间超时,才能跳出循环
         for (;;) {
-            if ((s = task.status) < 0)
-                break;
+            if ((s = task.status) < 0)  // 快速完成检查
+                break; // 任务结束
+            
             if (cc != null)
-                helpComplete(w, cc, 0);                             // 避免等待线程干等task不利用cpu并行能力,如果task是CountedCompleter,执行task或其祖先任务,加速task结束
-            else if (w.base == w.top || w.tryRemoveAndExec(task))
-                helpStealer(w, task);                               // 避免等待线程干等task不利用cpu并行能力,在task结束前,随机找一个工作队列,执行其任务
-            if ((s = task.status) < 0)
-                break;
+                // CountedCompleter的join不应该阻塞,而应靠推进完成💯💯💯
+                helpComplete(w, cc, 0);                             // helpComplete不会发生挂起,CountedCompleter的join是没有挂起等待,就是不断的执行.
+            else if (w.base == w.top || w.tryRemoveAndExec(task))   // 如果task是普通ForkJoinTask
+                // 如果当前工作队列为空,task不在本队列; 或者执行task失败
+                helpStealer(w, task);                               // 找到正在偷该任务的worker,帮助其执行后续任务,防止join形成链式阻塞
+            
+            
+            
+            if ((s = task.status) < 0)  // 在后面挂起前再检查一下,避免不必要的阻塞
+                break; // 任务结束
             long ms, ns;
             if (deadline == 0L)
                 ms = 0L;
             else if ((ns = deadline - System.nanoTime()) <= 0L)
-                break;
+                break;  // 等待时间超时
             else if ((ms = TimeUnit.NANOSECONDS.toMillis(ns)) <= 0L)
                 ms = 1L;
-            if (tryCompensate(w)) {
+            
+            if (tryCompensate(w)) {   // 在当前worker即将阻塞前,判断是否需要创建/唤醒一个补偿线程,以维持ForkJoinPool的并行度不下降
                 task.internalWait(ms);
                 U.getAndAddLong(this, CTL, AC_UNIT);
             }
@@ -748,20 +767,20 @@ final int awaitJoin(WorkQueue w, ForkJoinTask<?> task, long deadline) {
 ```text
 private int doJoin() {
     int s; Thread t; ForkJoinWorkerThread wt; ForkJoinPool.WorkQueue w;
-    if((t = Thread.currentThread()) instanceof ForkJoinWorkerThread){
-        if((w = (wt = (ForkJoinWorkerThread)t).workQueue).tryUnpush(this) && (s = doExec()) < 0){
+    if((t = Thread.currentThread()) instanceof ForkJoinWorkerThread){  // 如果join方线程是内部线程
+        if((w = (wt = (ForkJoinWorkerThread)t).workQueue).tryUnpush(this) && (s = doExec()) < 0){   // 将被join方的this_ForkJoinTask从其所属的工作队列中移除,且发现任务已经是终态,则直接返回
             return s;
         } else {
-            return wt.pool.awaitJoin(w, this, 0L)
+            return wt.pool.awaitJoin(w, this, 0L)   // 如果将被join方的this_ForkJoinTask从其所属的工作队列中移除失败,或者任务还未完成,就awaitJoin
         }
     }else {
-            return externalAwaitDone();
+            return externalAwaitDone();   // 如果join方线程是外部线程
     }	
 }
 
 private int doInvoke() {
     int s; Thread t; ForkJoinWorkerThread wt;       
-    if(s = doExec()) < 0) {
+    if(s = doExec()) < 0) {  // 如果任务已经是终态,直接返回
         return s;    
     } else {
         if ((t = Thread.currentThread()) instanceof ForkJoinWorkerThread) {
@@ -788,6 +807,145 @@ public final V get(long timeout, TimeUnit unit) throws InterruptedException, Exe
     //....    
 }  
 ```
+
+## helpComplete
+
+helpComplete只会被awaitJoin调用.(请不要随意扩大用例的context)
+
+工作线程w主动参与推进task(一个 CountedCompleter)所属计算子图的完成.
+
+```text
+final int helpComplete(WorkQueue w, CountedCompleter<?> task, int maxTasks) {
+    WorkQueue[] ws; int s = 0, m;
+    
+    if ((ws = workQueues) != null && (m = ws.length - 1) >= 0 && task != null && w != null) {
+        int mode = w.config;                 // for popCC
+        int r = w.hint ^ w.top;              // arbitrary seed for origin
+        int origin = r & m;                  // first queue to scan
+        int h = 1;                           // 1:ran, >1:contended, <0:hash
+        
+        // 从随机位置开始扫描所有工作队列
+        for (int k = origin, oldSum = 0, checkSum = 0;;) {
+            CountedCompleter<?> p; WorkQueue q;
+            if ((s = task.status) < 0)
+                break; // 主要的循环退出口:task任务完成
+            
+            if (h == 1 && (p = w.popCC(task, mode)) != null) {   // 先在当前工作线程的工作队列中查找并执行task及其子任务(top处)
+                p.doExec(); 
+                if (maxTasks != 0 && --maxTasks == 0)                            // maxTasks != 0 && --maxTasks == 0 这样当maxTasks初始值为0时,就不会触发--maxTasks,从而当入参maxTasks为0时,不限制执行了多少个task子任务
+                    break;
+                origin = k;                  // reset
+                oldSum = checkSum = 0;
+            }
+            else {                           // 当前工作线程的工作队列中找不到task及其子任务,去其他工作队列中寻找(主要针对非task的工作线程,即stealer线程)
+                if ((q = ws[k]) == null)
+                    h = 0;
+                else if ((h = q.pollAndExecCC(task)) < 0)    // 在ws[k]工作队列中查找并执行task及其子任务(base处)
+                    checkSum += h;
+                
+                // 可以继续循环重新尝试执行task及其子任务
+                if (h > 0) {                                         // h值的含义来源于pollAndExecCC返回值的定义, 1-执行任务成功 2-因为并发没有执行成功可以重试 negative-执行失败且没必要重试
+                    if (h == 1 && maxTasks != 0 && --maxTasks == 0)
+                        break;
+                    r ^= r << 13; r ^= r >>> 17; r ^= r << 5; // xorshift
+                    origin = k = r & m;      // 不管是h=1/2,都再找一个其他的工作队列
+                    oldSum = checkSum = 0;
+                }
+                else if ((k = (k + 1) & m) == origin) {
+                    if (oldSum == (oldSum = checkSum))
+                        break;   // 如果两次完整扫描,队列状态未变化,没有任务可帮,退出 helpComplete
+                    checkSum = 0;
+                }
+            }
+        }
+    }
+    return s;
+}
+```
+
+## helpStealer
+
+它解决的是Fork/Join中一个经典问题：我在等的任务,被别人偷走了,而那个人可能又在等别人.
+当工作线程 w 在 join(task) 时,如果发现 task 已被其他 worker 偷走并正在执行,则沿着“偷取链”定位该 worker(及其后续 join 链),并主动帮其执行队列中的任务,从而推进 task 的完成,避免 join 阻塞.
+
+```text
+private void helpStealer(WorkQueue w, ForkJoinTask<?> task) {
+    WorkQueue[] ws = workQueues;
+    int oldSum = 0, checkSum, m;
+    
+    if (ws != null && (m = ws.length - 1) >= 0 && w != null && task != null) {
+        
+        // 最外层do–while:全局稳定性检测
+        do {                                       // restart point
+            checkSum = 0;                          // for stability check
+            ForkJoinTask<?> subtask;
+            WorkQueue j = w, v;                    // v is subtask stealer
+            
+            
+            // descent循环:沿“偷取链”向下追踪. 只要subtask未完成,就尝试找出: 谁在执行它,它是否又join了别的任务
+            descent: for (subtask = task; subtask.status >= 0; ) {
+                for (int h = j.hint | 1, k = 0, i; ; k += 2) {                            // 只扫描奇数索引的非共享工作队列
+                    if (k > m)                     // 扫描了一整圈,没有任何worker在偷subtask
+                        break descent;
+                    
+                    if ((v = ws[i = (h + k) & m]) != null) {
+                        if (v.currentSteal == subtask) {  // 💯💯💯currentSteal的用途在这里
+                            j.hint = i;
+                            break;
+                        }
+                        checkSum += v.base;
+                    }
+                }
+                // 此时已经识别到stealer
+                
+                // 帮助stealer执行队列里的任务,或继续向下“追join”
+                for (;;) {                         // help v or descend
+                    ForkJoinTask<?>[] a; int b;
+                    checkSum += (b = v.base);      // 
+                    
+                    ForkJoinTask<?> next = v.currentJoin;
+                    if (subtask.status < 0 || j.currentJoin != subtask || v.currentSteal != subtask) // stale
+                        break descent;
+                    if (b - v.top >= 0 || (a = v.array) == null) {       // 队列为空
+                        if ((subtask = next) == null)                    
+                            break descent;
+                        
+                        // stealer自己也在join别的任务,去帮助stealer正在join的任务 💯💯💯
+                        j = v;
+                        break;
+                    }
+                    
+                    // 尝试真正“帮忙”,从base处偷任务
+                    int i = (((a.length - 1) & b) << ASHIFT) + ABASE;
+                    ForkJoinTask<?> t = ((ForkJoinTask<?>) U.getObjectVolatile(a, i));
+                    if (v.base == b) {
+                        if (t == null)             // stale
+                            break descent;
+                        
+                        // 执行一个stealer的任务,然后把当前工作线程的工作队列中的任务都执行完(当前正在等待join完成的任务不在工作队列,在方法栈中呢)
+                        if (U.compareAndSwapObject(a, i, t, null)) {
+                            v.base = b + 1;
+                            ForkJoinTask<?> ps = w.currentSteal;
+                            int top = w.top;
+                            do {
+                                U.putOrderedObject(w, QCURRENTSTEAL, t);
+                                t.doExec();                                
+                            } while (task.status >= 0 &&
+                                     w.top != top &&
+                                     (t = w.pop()) != null);               // t初始是从stealer的base偷来的,之后是当前工作线程的工作队列的top处的任务
+                            U.putOrderedObject(w, QCURRENTSTEAL, ps);
+                            
+                            if (w.base != w.top)
+                                return;            // 前工作线程的工作队列又来任务了,不帮了
+                        }
+                    }
+                }
+            }
+        } while (task.status >= 0 && oldSum != (oldSum = checkSum));
+    }
+}
+```
+
 
 ## 线程池管理
 

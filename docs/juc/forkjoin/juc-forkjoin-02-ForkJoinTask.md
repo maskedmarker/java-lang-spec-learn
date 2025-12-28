@@ -62,7 +62,10 @@ volatile int status; // accessed directly by pool and workers  初始值为0; st
 
 ## fork
 
-向工作队列中提交当前任务(this)
+向工作队列中提交当前任务的一个别称,fork类似于submit.💯💯💯
+
+如果当前线程是工作线程,将新任务提交到当前工作队列.
+(兜底,fork-join范式中不会这样操作)如果当前线程是外部线程,将新任务提交到common的共享队列.
 
 ```text
 public final ForkJoinTask<V> fork() {
@@ -70,7 +73,7 @@ public final ForkJoinTask<V> fork() {
     if ((t = Thread.currentThread()) instanceof ForkJoinWorkerThread)
         ((ForkJoinWorkerThread)t).workQueue.push(this);  // 提交到当前工作线程所在的工作队列
     else
-        ForkJoinPool.common.externalPush(this);         // 通常fork发生在ForkJoinTask.exec()方法中,这里给了兜底保护.
+        ForkJoinPool.common.externalPush(this);         // 通常fork发生在ForkJoinTask.exec()方法中,这里给了兜底保护.向common的共享队列中提交任务
     return this;
 }
 ```
@@ -87,6 +90,8 @@ public final V join() {
 ```
 
 ## doJoin
+
+因为被join任务在完成前,当前任务不能再继续. join等于是主动暂停执行当前任务代码,转头去执行被join任务的代码,帮助其完成.💯💯💯
 
 ```text
 private int doJoin() {
@@ -108,9 +113,13 @@ private int doJoin() {
         return s;
     } else {
         if((t = Thread.currentThread()) instanceof ForkJoinWorkerThread){
-            if((w = (wt = (ForkJoinWorkerThread)t).workQueue).tryUnpush(this) && ((s = doExec()) < 0)){
-                return s;
+            if((w = (wt = (ForkJoinWorkerThread)t).workQueue).tryUnpush(this) && ((s = doExec()) < 0)){   // 刚fork提交的新任务被压入当前工作队列的top处,弹出刚压入的新任务完成后,去执行新任务(💯💯💯join等于是放弃当前任务的cpu执行权,去执行被join任务)
+                return s;  // 如果新任务执行完成则返回;
             } else {
+                // ForkJoinPool支持普通ForkJoinTask和CountedCompleter同时存在一个ForkJoinPool实例中.
+                // else分2类情形:
+                //           如果刚fork提交的新任务被steal走了,只能等stealer完成任务.
+                //           如果刚fork提交的新任务是CountedCompleter,通常子任务还未完成,doExec()返回非负数,表示任务未完成,需要继续等待.
                 return wt.pool.awaitJoin(w, this, 0L);
             }
         } else{
@@ -118,6 +127,10 @@ private int doJoin() {
         }
     }
 }
+
+
+提示:
+awaitJoin方法名中有await单词,但是该方法并不是真让当前线程挂起等待,这样cpu的并行能力就得不到充分利用.
 ```
 
 ## externalAwaitDone

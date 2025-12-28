@@ -455,3 +455,50 @@ private boolean awaitWork(WorkQueue w, int r) {
     return true;
 }
 ```
+
+### popCC
+
+如果工作队列(top-1)处的任务是task的子任务,则将(top-1)处的任务弹出,否则返回null;
+
+备注: fork的新任务都放在当前工作线程的工作任务队列中
+
+```text
+final CountedCompleter<?> popCC(CountedCompleter<?> task, int mode) {
+    // 用来保存快照(这是ForkJoinPool中典型的 optimistic + snapshot 模式)
+    int s; ForkJoinTask<?>[] a; Object o;
+    
+    if (base - (s = top) < 0 && (a = array) != null) {
+        long j = (((a.length - 1) & (s - 1)) << ASHIFT) + ABASE;  // 获取(top-1)处的任务
+        if ((o = U.getObjectVolatile(a, j)) != null && (o instanceof CountedCompleter)) {  // 如果(top-1)处的任务是CountedCompleter
+            CountedCompleter<?> t = (CountedCompleter<?>)o;
+            
+            // 以(top-1)处的任务作为CountedCompleter的父子链的起点,往上查找来判断(top-1)处的任务是否task的子任务:如果(top-1)处的任务是task的子任务,则将(top-1)处的任务弹出
+            for (CountedCompleter<?> r = t;;) {
+                if (r == task) {
+                    if (mode < 0) { // shared mode
+                        if (U.compareAndSwapInt(this, QLOCK, 0, 1)) {
+                            if (top == s && array == a && U.compareAndSwapObject(a, j, t, null)) {
+                                U.putOrderedInt(this, QTOP, s - 1);
+                                U.putOrderedInt(this, QLOCK, 0);
+                                return t;
+                            }
+                            U.compareAndSwapInt(this, QLOCK, 1, 0);
+                        }
+                    }
+                    else if (U.compareAndSwapObject(a, j, t, null)) {
+                        U.putOrderedInt(this, QTOP, s - 1);
+                        return t;
+                    }
+                    break;
+                }
+                else if ((r = r.completer) == null) // 沿着父子关系,直到根
+                    break;
+            }
+        }
+    }
+    return null;
+}
+
+mode < 0 —— 必须加锁路径:   外部线程/高竞争场景
+mode >= 0 —— 无锁快路径:   当前线程拥有队列（worker 自身）
+```
