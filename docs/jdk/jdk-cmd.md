@@ -3,7 +3,53 @@
 ## java
 
 ```text
+java命令的使用详细说明参考 https://github.com/openjdk/jdk/blob/e65fd45d/src/java.base/share/man/java.md
 
+To launch a class file:  java [options] mainclass [args ...]
+To launch the main class in a JAR file: java [options] -jar jarfile [args ...]
+To launch the main class in a module: java [options] -m module[/mainclass] [args ...]    or  java [options] --module module[/mainclass] [args ...]
+To launch a source-file program: java [options] source-file [args ...]
+
+
+Overview of Java Options
+
+Standard Options for Java
+    Options guaranteed to be supported by all implementations of the Java Virtual Machine (JVM)
+Extra Options for Java
+    General purpose options that are specific to the Java HotSpot Virtual Machine. They aren't guaranteed to be supported by all JVM implementations, and are subject to change. These options start with -X.
+The advanced options
+    These are developer options used for tuning specific areas of the Java HotSpot Virtual Machine operation. Advanced options start with -XX
+    
+Standard Options for Java
+    --class-path classpath, -classpath classpath, or -cp classpath
+            Specifies a list of directories, JAR files, and ZIP archives to search for class files.
+    --module-path modulepath... or -p modulepath
+            Specifies where to find application modules with a list of path elements. The elements of a module path can be a file path to a module or a directory containing modules.
+    --add-modules module[,module...]
+            Specifies the root modules to resolve in addition to the initial module.
+    -Dproperty=value
+            Sets a system property value. 
+    -agentlib:libname[=options]    
+            Loads the native agent library specified by the absolute path name. 
+    -javaagent:jarpath[=options]
+            Loads the specified Java programming language agent. 
+    -verbose:class
+            Displays information about each loaded class.
+    -verbose:gc
+            Displays information about each garbage collection (GC) event.
+    -verbose:jni
+            Displays information about the use of native methods and other Java Native Interface (JNI) activity.
+    -verbose:module
+            Displays information about the modules in use.
+    -X 
+            Prints the help on extra options to the error stream.        
+    @argfile
+            The @argfile option overcomes command-line length limitations by enabling the launcher to expand the contents of argument files after shell expansion, but before argument processing.
+            
+
+Extra Options for Java
+    -Xbootclasspath/a:directories|zip|JAR-files
+            Specifies a list of directories, JAR files, and ZIP archives to append to the end of the default bootstrap class path.          
 ```
 
 ## jar
