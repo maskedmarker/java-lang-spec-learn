@@ -1,4 +1,4 @@
-# juc-AQS-Semaphore
+# juc-lock-Semaphore
 
 AQS.state的含义:
 state表示剩余许可数量

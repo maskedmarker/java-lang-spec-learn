@@ -1,4 +1,4 @@
-# juc-AQS-ReentrantReadWriteLock
+# juc-lock-ReentrantReadWriteLock
 
 ## 使用样例
 

@@ -1,4 +1,4 @@
-# juc-AQS-CountDownLatch
+# juc-lock-CountDownLatch
 
 AQS.state的含义:
 state表示剩余计数

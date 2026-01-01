@@ -1,4 +1,4 @@
-# juc-AQS-ReentrantLock
+# juc-lock-ReentrantLock
 
 AQS.state的含义:
 state表示重入次数.(为了互斥还需一个currentThread来完成同一个线程的多次重入)
