@@ -49,7 +49,51 @@ Standard Options for Java
 
 Extra Options for Java
     -Xbootclasspath/a:directories|zip|JAR-files
-            Specifies a list of directories, JAR files, and ZIP archives to append to the end of the default bootstrap class path.          
+            Specifies a list of directories, JAR files, and ZIP archives to append to the end of the default bootstrap class path.
+    -Xmn size 
+            Sets the initial and maximum size (in bytes) of the heap for the young generation (nursery) in the generational collectors.     (-Xmn中的n指的就是nursery 幼儿园)
+    -Xms size
+            Sets the minimum and the initial size (in bytes) of the heap.     (-Xms中的s指的就是size)              
+    -Xmx size
+            Specifies the maximum size (in bytes) of the heap.          (-Xmx中的x指的就是max)     
+    -Xss size
+            Sets the thread stack size (in bytes)
+    -Xnoclassgc
+            Disables garbage collection (GC) of classes. 
+    -Xlog:option
+            Configure or enable logging with the Java Virtual Machine (JVM) unified logging framework. (jvm层面的日志)
+            -Xlog:gc
+                    Logs messages tagged with the gc tag using info level to stdout.
+            
+
+
+Advanced Runtime Options for Java
+    -XX:+HeapDumpOnOutOfMemoryError
+            Enables the dumping of the Java heap to a file in the current directory by using the heap profiler (HPROF) when a java.lang.OutOfMemoryError exception is thrown by the JVM.
+    -XX:HeapDumpPath=path
+            Sets the path and file name for writing the heap dump provided by the heap profiler (HPROF) when the -XX:+HeapDumpOnOutOfMemoryError option is set.
+
+    -XX:ErrorFile=filename
+            Specifies the path and file name to which error data is written when an irrecoverable error occurs. 
+            By default, this file is created in the current working directory and named hs_err_pid.log where pid is the identifier of the process that encountered the error.
+    -XX:OnError=string
+            Sets a custom command or a series of semicolon-separated commands to run when an irrecoverable error occurs.
+    -XX:+UsePerfData
+            Enables the perfdata feature.
+    -XX:+PerfDataSaveToFile
+            If enabled, saves jstat binary data when the Java application exits.  Use the jstat command to display the performance data contained in this file
+    
+    -Xloggc:filename 
+            this command is replaced by -Xlog:gc:filename
+    
+    -XX:OnOutOfMemoryError=string : Sets a custom command or a series of semicolon-separated commands to run when an OutOfMemoryError exception is first thrown by the JVM. 
+    -XX:+PrintCommandLineFlags : Enables printing of ergonomically selected JVM flags that appeared on the command line. 
+    -XX:ActiveProcessorCount=x
+            Overrides the number of CPUs that the VM will use to calculate the size of thread pools it will use for various operations such as Garbage Collection and ForkJoinPool.    
+    -XX:AllocateHeapAt=path
+            Takes a path to the file system and uses memory mapping to allocate the object heap on the memory device. 
+            Using this option enables the HotSpot VM to allocate the Java object heap on an alternative memory device, such as an NV-DIMM, specified by the user.        
+            Some operating systems expose non-DRAM memory through the file system.Memory-mapped files in these file systems bypass the page cache and provide a direct mapping of virtual memory to the physical memory on the device.
 ```
 
 ## jar
