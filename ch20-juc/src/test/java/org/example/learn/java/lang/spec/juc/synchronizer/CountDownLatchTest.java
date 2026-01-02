@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc.lock;
+package org.example.learn.java.lang.spec.juc.synchronizer;
 
 import org.example.learn.java.lang.spec.juc.util.ThreadUtils;
 import org.junit.Test;
@@ -6,9 +6,6 @@ import org.junit.Test;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class CountDownLatchTest {
 
