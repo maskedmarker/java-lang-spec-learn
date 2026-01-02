@@ -3,12 +3,19 @@
 CyclicBarriers are used in programs in which we have a fixed number of threads that must wait for each other to reach a common point before continuing execution.
 The barrier is called cyclic because it can be re-used after the waiting threads are released.
 
+
 ## 使用样例
 
 
 ## 源码实现
 
 ### dowait
+
+如果没有发生超时/中断,
+当非最后一个到达的线程调用await方法会触发当前线程挂起;
+最后一个到达的线程会先触发barrierAction,然后唤醒其他挂起的线程,更新CyclicBarrier的generation,然后释放锁并退出CyclicBarrier.await方法;
+被唤醒的线程依次获取到锁后,发现generation变了,然后释放锁并退出CyclicBarrier.await方法.
+
 
 ```text
 private int dowait(boolean timed, long nanos) throws InterruptedException, BrokenBarrierException, TimeoutException {
@@ -34,7 +41,8 @@ private int dowait(boolean timed, long nanos) throws InterruptedException, Broke
                 if (command != null)
                     command.run();
                 ranAction = true;
-                nextGeneration();
+                
+                nextGeneration();  // 💯💯💯先执行barrierCommand,然后再触发nextGeneration
                 return 0;
             } finally {
                 if (!ranAction)
