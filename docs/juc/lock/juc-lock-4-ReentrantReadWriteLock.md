@@ -115,7 +115,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 
     Sync() {
         readHolds = new ThreadLocalHoldCounter();
-        setState(getState()); // ensures visibility of readHolds
+        setState(getState()); // ensures visibility of readHolds  读取state并原封不动地写入,主要是为了利用state的volatile属性,将readHolds的写入操作让其他线程可见
     }
     
     // --------------------------------------------- 如下是写锁操作 ------------------------------------------------------------------------
@@ -316,4 +316,60 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
     初始状态: 此时要么同步队列清空要么队头是写锁节点;且此时state中只有读锁没有写锁
     后续:     
             如果其他读锁都释放了,此时可以唤醒写锁线程.(写锁线程后面释放时,唤醒下一个线程是读锁的话,会发生级联唤醒连续的读锁线程)
+```
+
+### Sync.tryReadLock
+
+```text
+final boolean tryReadLock() {
+    Thread current = Thread.currentThread();
+    for (;;) {
+        int c = getState();
+        if (exclusiveCount(c) != 0 &&
+            getExclusiveOwnerThread() != current)
+            return false;
+        
+        int r = sharedCount(c);                                 // 只关注读操作
+        if (r == MAX_COUNT)
+            throw new Error("Maximum lock count exceeded");
+        if (compareAndSetState(c, c + SHARED_UNIT)) {
+            if (r == 0) {
+                firstReader = current;
+                firstReaderHoldCount = 1;
+            } else if (firstReader == current) {
+                firstReaderHoldCount++;
+            } else {
+                HoldCounter rh = cachedHoldCounter;
+                if (rh == null ||
+                    rh.tid != LockSupport.getThreadId(current))
+                    cachedHoldCounter = rh = readHolds.get();
+                else if (rh.count == 0)
+                    readHolds.set(rh);
+                rh.count++;
+            }
+            return true;
+        }
+    }
+}
+```
+
+### Sync.tryWriteLock
+
+```text
+final boolean tryWriteLock() {
+    Thread current = Thread.currentThread();
+    int c = getState();
+    if (c != 0) {                                            // 不仅关注读操作还要关注写操作
+        int w = exclusiveCount(c);
+        if (w == 0 || current != getExclusiveOwnerThread())
+            return false;
+        if (w == MAX_COUNT)
+            throw new Error("Maximum lock count exceeded");
+    }
+    
+    if (!compareAndSetState(c, c + 1))
+        return false;
+    setExclusiveOwnerThread(current);
+    return true;
+}
 ```

@@ -56,6 +56,9 @@ tryRelease-Returns:true if this object is now in a fully released state, so that
 
 
 ## 共享模式
+
+💯💯💯💯💯💯💯💯💯💯💯💯 共享模式的最大不同就是级联唤醒
+
 ```text
 在共享模式下,还是只有第一线程节点能才有尝试抢占锁资源的权力.
 ⚠️第一线程节点抢占到锁资源后,还要再连带唤醒一个第二节点线程.
