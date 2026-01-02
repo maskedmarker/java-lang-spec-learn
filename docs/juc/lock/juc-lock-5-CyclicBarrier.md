@@ -1,5 +1,8 @@
 # juc-CyclicBarrier
 
+CyclicBarriers are used in programs in which we have a fixed number of threads that must wait for each other to reach a common point before continuing execution.
+The barrier is called cyclic because it can be re-used after the waiting threads are released.
+
 ## 使用样例
 
 
