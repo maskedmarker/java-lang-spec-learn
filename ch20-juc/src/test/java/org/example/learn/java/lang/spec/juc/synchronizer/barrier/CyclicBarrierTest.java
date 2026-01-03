@@ -7,7 +7,7 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class CyclicBarrierTest1 {
+public class CyclicBarrierTest {
     
     private static final int NUMBER_OF_THREAD = 3;
 
@@ -84,7 +84,7 @@ public class CyclicBarrierTest1 {
     }
 
     /**
-     * barrierAction不存在并发执行,最后一个到达的线程会在await方法中顺带执行barrierAction
+     * 当线程从await方法正常退出时,CyclicBarrier已经更新了generation,也就意味着可以重新使用CyclicBarrier
      */
     @Test
     public void test2() throws InterruptedException {
@@ -107,7 +107,7 @@ public class CyclicBarrierTest1 {
                     System.out.printf("线程%d继续执行,它是第%d个到达的\n", threadId, (NUMBER_OF_THREAD - index));
 
 
-                    // 当线程从await方法退出时,CyclicBarrier已经更新了generation,也就意味着可以重新使用CyclicBarrier
+                    // 当线程从await方法正常退出时,CyclicBarrier已经更新了generation,也就意味着可以重新使用CyclicBarrier
                     Thread.sleep(500);
                     System.out.printf("线程%d第二次到达屏障,等待其他线程...\n", threadId);
                     barrier.await();
