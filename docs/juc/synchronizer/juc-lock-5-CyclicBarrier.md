@@ -1,13 +1,42 @@
 # juc-CyclicBarrier
 
+```text
 CyclicBarriers are used in programs in which we have a fixed number of threads that must wait for each other to reach a common point before continuing execution.
 The barrier is called cyclic because it can be re-used after the waiting threads are released.
+
+CyclicBarrier相较于CountDownLatch,除了reusable和barrierAction之外,功能一样(都支持中断/挂起等待).
+```
 
 
 ## 使用样例
 
 
 ## 源码实现
+
+### CyclicBarrier
+
+```text
+public class CyclicBarrier {
+    
+    // 保证原子操作使用的排他锁
+    private final ReentrantLock lock = new ReentrantLock();
+    
+    // 当最后一个线程到达前,需要挂起等待
+    private final Condition trip = lock.newCondition();
+    
+    // 参与的线程数量(不可变)
+    private final int parties;
+    
+    // 当所有线程到达后,会触发的回调
+    private final Runnable barrierCommand;
+    
+    // 为了支持reusable,使用generation来表示同一个CyclicBarrier对象的不同使用版本
+    private Generation generation = new Generation();
+
+    // 还未到达的线程数量(初始值等于parties,每个线程到达就会count减一;当进入新的generation时,count的值会恢复到初始值parties;)
+    private int count;
+}
+```
 
 ### dowait
 

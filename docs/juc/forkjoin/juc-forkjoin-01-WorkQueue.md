@@ -56,6 +56,8 @@ Additionally, "qlock" saturates to an unlockable value (-1) at shutdown. Unlocki
 WorkQueue的字段是经过设置的,排列考虑缓存行(通常64字节)
 这里打乱了顺序,是为了将重要的/联系紧密的字段放在一起,方便学习.
 
+### WorkQueue
+
 ```text
 static final class WorkQueue {
 
@@ -91,6 +93,8 @@ static final class WorkQueue {
 }
 ```
 
+### scanState
+
 ```text
 scanState (32-bit int)
 
@@ -102,7 +106,7 @@ scanState (32-bit int)
 
 not-scanning表示工作线程此时在执行工作任务逻辑(即执行ForkJoinTask.doExe()方法);scanning表示工作线程此时没有执行工作任务逻辑.
 
-sequence-bits初始取自workQueues奇数索引的1st~16th的位序列,其后tryRelease和signalWorker都会每次自增(1<<16)
+sequence-bits初始取自workQueues奇数索引的1st~16th的位序列,其后tryRelease和signalWorker都会每次自增(1<<16)  (Total-Count只有16bits,自增保持低16bit序列不变)
 ```
 
 ```text

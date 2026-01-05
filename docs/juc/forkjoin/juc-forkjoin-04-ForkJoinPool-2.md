@@ -187,3 +187,95 @@ lockRunState/unlockRunState成对使用.
 synchronized (lock)代码块没有使用while-wait,因为synchronized (lock)代码块外层有一个类似与while(true)的for循环.同时此处不用while可以实现wait+自旋混合式的等待.
 ```
 
+### tryCompensate
+
+Tries to decrement active count (sometimes implicitly) and possibly release or create a compensating worker in preparation for blocking. 
+
+Params: w – caller
+Returns false (retryable by caller), on contention, detected staleness, instability, or termination.
+
+在某个内部工作线程即将发生阻塞时(非空闲挂起,因为业务原因),用极端谨慎的多层校验来维持线程池并行度稳定.
+        判断ForkJoinPool是否需要/以及是否能够,通过“激活空闲线程/减少活跃计数/创建新worker”来补偿线程池的并行度.
+返回: true → 当前worker可以安全阻塞; false → 不允许阻塞(继续自旋或重试)
+
+```text
+private boolean tryCompensate(WorkQueue w) {
+    boolean canBlock;
+    WorkQueue[] ws; long c; int m, pc, sp;
+    
+    if (w == null || w.qlock < 0 ||                                    // caller terminating
+        (ws = workQueues) == null || (m = ws.length - 1) <= 0 ||       // caller terminating
+        (pc = config & SMASK) == 0)                                    // parallelism disabled 并行度被禁用,不允许任何补偿
+        canBlock = false;
+    else if ((sp = (int)(c = ctl)) != 0)                        // (当前线程将要阻塞)如果有空闲的工作线程,尝试去激活它,保持线程池线程的并行度
+        canBlock = tryRelease(c, ws[sp & m], 0L);
+    else {                                                      // 没有空闲的工作线程,新增工作线程
+        int ac = (int)(c >> AC_SHIFT) + pc;
+        int tc = (short)(c >> TC_SHIFT) + pc;
+        int nbusy = 0;                                           // 统计忙碌的worker数,验证“是否真的满载”
+        for (int i = 0; i <= m; ++i) {                           // two passes of odd indices
+            WorkQueue v;
+            if ((v = ws[((i << 1) | 1) & m]) != null) {
+                if ((v.scanState & SCANNING) != 0)               //工作线程在执行任务,而正在找任务
+                    break;
+                ++nbusy;
+            }
+        }
+        
+        // 📌线程池状态状态不稳定,返回false让调用方重试
+        if (nbusy != (tc << 1) || ctl != c)                      // 因为遍历2遍奇数索引,所以nbusy最大可以是total-count的2倍
+            canBlock = false;                                    // unstable or stale   
+        
+        // 📌已达到最大并行度,当前工作线程没有待处理的任务,可以安心挂起,不会影响线程池的处理任务的并行度   ((nbusy == (tc << 1)):其他工作线程都在忙)
+        else if (tc >= pc && ac > 1 && w.isEmpty()) {                         // (tc >= pc)已达到并行度, (ac > 1)为了兜底, (w.isEmpty())当前工作线程的工作队列没有任务了  
+            long nc = ((AC_MASK & (c - AC_UNIT)) | (~AC_MASK & c));           // active-count减一 
+            canBlock = U.compareAndSwapLong(this, CTL, c, nc);
+        }
+        
+        else if (tc >= MAX_CAP || (this == common && tc >= pc + commonMaxSpares))
+            throw new RejectedExecutionException("Thread limit exceeded replacing blocked worker");
+        
+        // 📌当前还未达到最大并行度,通过新增工作线程,保证线程池并行度不降(当前线程即将阻塞)
+        else {                                // similar to tryAddWorker
+            boolean add = false; int rs;      // CAS within lock
+            long nc = ((AC_MASK & c) | (TC_MASK & (c + TC_UNIT)));  // total-count加一,active-count不变
+            
+            if (((rs = lockRunState()) & STOP) == 0)
+                add = U.compareAndSwapLong(this, CTL, c, nc);
+            unlockRunState(rs, rs & ~RSLOCK);
+            canBlock = add && createWorker(); // throws on exception
+        }
+    }
+    return canBlock;
+}
+```
+
+### managedBlock
+
+```text
+public static void managedBlock(ManagedBlocker blocker)
+    throws InterruptedException {
+    ForkJoinPool p;
+    ForkJoinWorkerThread wt;
+    Thread t = Thread.currentThread();
+    
+    if ((t instanceof ForkJoinWorkerThread) && (p = (wt = (ForkJoinWorkerThread)t).pool) != null) {    // 当前线程是内部内部工作线程
+        WorkQueue w = wt.workQueue;
+        
+        while (!blocker.isReleasable()) {                    // 当blocker不满足解除阻塞的条件时
+            if (p.tryCompensate(w)) {
+                try {
+                    do {} while (!blocker.isReleasable() &&
+                                 !blocker.block());
+                } finally {
+                    U.getAndAddLong(p, CTL, AC_UNIT);
+                }
+                break;
+            }
+        }
+    } else {                                                                                              // 当前线程是外部线程
+        do {} while (!blocker.isReleasable() &&
+                     !blocker.block());
+    }
+}
+```

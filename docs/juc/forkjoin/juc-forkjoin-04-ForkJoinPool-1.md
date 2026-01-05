@@ -9,7 +9,7 @@ ForkJoinPool的任务要么待执行在WorkQueue中保存着,要么正在被执�
 ## 关键字段
 
 
-workQueues
+### workQueues
 ```text
 ForkJoinPool.workQueues数组在初始化后不会动态扩容,workQueues数组元素按需新增,新增后会一直保留不被清除,即对应的线程也不会销毁,而是挂起避免空转; 💯💯💯
 WorkQueue.array会扩容但不会缩容,array数组元素在任务结束后会主动清除.
@@ -18,7 +18,7 @@ workQueues数组的长度就是用户设定或者cpu核心线程数.由于fork-j
 ```
 
 
-runState
+### runState
 ```text
 private static final int  RSLOCK     = 1;
 private static final int  RSIGNAL    = 1 << 1;
@@ -30,7 +30,7 @@ private static final int  SHUTDOWN   = 1 << 31;    // Shutting down
 只有lockRunState/unlockRunState能修改runState,其他方法只能读runState
 ```
 
-
+### ctl
 ```text
 volatile long ctl;                   // main pool control
 
@@ -49,16 +49,16 @@ private static final long ADD_WORKER = 0x0001L << (TC_SHIFT + 15); // sign
 
 ---------------------------------------------------------------------------------------------------------------------------
 
-64-bits ctl被拆成四段： ctl = (AC << 48) | (TC << 32) | (ST << 31) | SS
+64-bits ctl被拆成四段： ctl = (AC << 48) | (TC << 32) | (ST << 31) | SP
 +---------------------------+---------------+-----+--------------------+
-|   AC (activeCount:16)     | TC (total:16) | ST  |    SS (stack:31)   |
+|   AC (activeCount:16)     | TC (total:16) | ST  |    SP (stack:31)   |
 +---------------------------+---------------+-----+--------------------+
  63                       48 47           32 31    30                 0
 
 AC = Active Count       (bits 63..48)
 TC = Total Count        (bits 47..32)
 ST = version/stop bit   (bit 31)
-SS = stack pointer      (bits 30..0)
+SP = stack pointer      (bits 30..0)
 
 
 
@@ -84,13 +84,19 @@ ForkJoinPool线程池中的工作线程是创建后是不会销毁的,无任务�
 大部分资料称此位为 ctl’s epoch bit.
 
 
-⭐ SS：Stack pointer(31 bits)
+⭐ SP：Stack pointer(31 bits)
 ctl的低31位保存不活跃工作队列的WorkQueue.scanState值.当有多个不活跃工作队列时,通过stackPred字段形成一个stack栈数据结构,ctl的低31位保存的就是栈顶值. (不活跃线程的scanState值都不同)
 提取方式：int sp = (int)ctl;
 如果 sp =0,表示没有不活跃线程,即没有空闲线程.
 
 ```
 
+### config
+
+```text
+config
+
+```
 
 ## 构造函数
 
