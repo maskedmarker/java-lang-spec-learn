@@ -46,7 +46,7 @@
 
 ❗AQS的同步队列是一个FIFO的队列(它使用了lock-free double-linked FIFO queue)
 
-![](E:\git-repo\cjh-repo\java-lang-spec-learn\docs\images\juc-aqs-lock-free-double-lined-FIFO-queue.png)
+![](..\images\juc-aqs-lock-free-double-lined-FIFO-queue.png)
 注意这里的prev和next与aqs相反
 
 ```text
