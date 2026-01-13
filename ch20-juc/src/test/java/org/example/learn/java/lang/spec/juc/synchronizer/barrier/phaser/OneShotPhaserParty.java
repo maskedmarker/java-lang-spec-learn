@@ -9,14 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class OneShotPhaserParty implements Runnable {
 
-    private static final AtomicInteger THREAD_ID_GENERATOR = new AtomicInteger();
-
     final int threadId;
     final Phaser phaser;
     final long workTimeSec;
 
     public OneShotPhaserParty(Phaser phaser, long workTimeSec) {
-        this.threadId = THREAD_ID_GENERATOR.getAndIncrement();
+        this.threadId = PhaserParty.THREAD_ID_GENERATOR.getAndIncrement();
         this.phaser = phaser;
         this.workTimeSec = workTimeSec;
     }
