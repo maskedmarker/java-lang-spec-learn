@@ -1,8 +1,5 @@
-package org.example.learn.java.lang.spec.juc.synchronizer.barrier;
+package org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser;
 
-import org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser.PhaserMonitor;
-import org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser.PhaserParty;
-import org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser.TroublePhaserParty;
 import org.example.learn.java.lang.spec.juc.util.ThreadUtils;
 import org.junit.Assert;
 import org.junit.Test;
@@ -58,6 +55,7 @@ public class PhaserTest2 {
         Assert.assertEquals("用户代码需要自己兜底异常,并释放哪些正常等待的线程", 0, waitingCount);
 
         monitorThread.interrupt();
+        // 用户自己清理那些无限循环的参与者(这里省略)
     }
 
     @Test
@@ -71,9 +69,9 @@ public class PhaserTest2 {
 
         Thread[] workers = new Thread[NUMBER_OF_WORKER];
         for (int i = 0; i < NUMBER_OF_WORKER - 1; i++) {
-            (workers[i] = new Thread(new PhaserParty(phaser, false, random.nextInt(0, 4), true))).start();  // repeat-work
+            (workers[i] = new Thread(new PhaserParty(phaser, false, random.nextInt(0, 4), true))).start();  // 无限循环的参与者
         }
-        (workers[NUMBER_OF_WORKER - 1] = new Thread(new TroublePhaserParty(phaser, false, 0, true))).start();  // repeat-work
+        (workers[NUMBER_OF_WORKER - 1] = new Thread(new TroublePhaserParty(phaser, false, 0, true))).start();  // 无限循环的参与者
 
         int maxWaitSec = 4 * NUMBER_OF_WORKER;
         int waitPhase = 0;
@@ -95,12 +93,14 @@ public class PhaserTest2 {
 
         // 选择补充新的参与者
         new Thread(new PhaserParty(phaser, false, 0, true)).start();
-
-        ThreadUtils.yieldWait(2, TimeUnit.SECONDS);
+        while (phaser.getPhase() == phase) {
+            ThreadUtils.yieldWait(1, TimeUnit.SECONDS);
+        }
         waitingCount = Arrays.stream(workers).filter(i -> i.getState().equals(Thread.State.WAITING)).count();
         System.out.println("waitingCount = " + waitingCount);
         Assert.assertEquals("用户代码需要自己兜底异常,并释放哪些正常等待的线程", 0, waitingCount);
 
         monitorThread.interrupt();
+        // 用户自己清理那些无限循环的参与者(这里省略)
     }
 }

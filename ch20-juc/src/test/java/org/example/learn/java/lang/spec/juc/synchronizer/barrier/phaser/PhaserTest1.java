@@ -1,9 +1,5 @@
-package org.example.learn.java.lang.spec.juc.synchronizer.barrier;
+package org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser;
 
-import javafx.concurrent.Worker;
-import org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser.OneShotPhaserParty;
-import org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser.PhaserMonitor;
-import org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser.PhaserParty;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -186,6 +182,7 @@ public class PhaserTest1 {
 
         // 注意观察控制台输出的内容: 注册到阶段
 
+        // 用户自己清理那些无限循环的参与者(这里省略)
         // junit会在本方法执行完后,销毁工作线程
     }
 }
