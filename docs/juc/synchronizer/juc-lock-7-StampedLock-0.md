@@ -1,5 +1,7 @@
 # juc-StampedLock
 
+StampedLock适用于写锁持有期很短的场景(纳秒/微妙);AQS适用于锁持有期没那么短的场景.💯💯💯
+
 
 ```text
 A capability-based lock with three modes for controlling read/write access. 
