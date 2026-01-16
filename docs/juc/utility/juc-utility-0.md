@@ -1,0 +1,6 @@
+# 并发安全的数据结构
+
+juc除了提供更底层的同步器之外,还提供了供应用层使用的由底层同步器支持的并发安全且拥有特殊feature的数据结构
+
+BlockingQueue
+BlockingDeque
