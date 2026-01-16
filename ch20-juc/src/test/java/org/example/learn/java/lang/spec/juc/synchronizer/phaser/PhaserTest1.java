@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser;
+package org.example.learn.java.lang.spec.juc.synchronizer.phaser;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -6,7 +6,6 @@ import org.junit.Test;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * arrive()方法是非阻塞的

@@ -1,7 +1,6 @@
-package org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser;
+package org.example.learn.java.lang.spec.juc.synchronizer.phaser;
 
 import java.util.concurrent.Phaser;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Phaser的参与者

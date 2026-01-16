@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc.synchronizer.barrier.phaser;
+package org.example.learn.java.lang.spec.juc.synchronizer.phaser;
 
 import org.example.learn.java.lang.spec.juc.util.ThreadUtils;
 import org.junit.Assert;

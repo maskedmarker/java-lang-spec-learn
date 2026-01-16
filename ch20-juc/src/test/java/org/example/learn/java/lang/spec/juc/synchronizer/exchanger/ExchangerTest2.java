@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.juc.synchronizer.barrier.exchanger;
+package org.example.learn.java.lang.spec.juc.synchronizer.exchanger;
 
 import org.junit.Test;
 
