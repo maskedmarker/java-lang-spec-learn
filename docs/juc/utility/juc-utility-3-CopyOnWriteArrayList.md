@@ -1,9 +1,19 @@
 # juc-CopyOnWriteArrayList
 
+
+```text
+CopyOnWriteArrayList适合读多写少的场景,不过这类慎用.每次写操作都会拷贝数组.在原数组的内容比较多的情况下,可能导致young gc或者full gc.
+```
+
+
+## 源码实现
+
 ```text
 public class CopyOnWriteArrayList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
 
+    // 排他锁保证并发时的线程安全
     final transient ReentrantLock lock = new ReentrantLock();
+    // 底层使用数组作为容纳数据的数据结构
     private transient volatile Object[] array;
     
     public CopyOnWriteArrayList() {
@@ -26,9 +36,9 @@ public boolean add(E e) {
     try {
         Object[] elements = getArray();                                // 获取数组快照
         int len = elements.length;
-        Object[] newElements = Arrays.copyOf(elements, len + 1);      // 复制快照内容
+        Object[] newElements = Arrays.copyOf(elements, len + 1);      // 复制快照内容💯
         newElements[len] = e;
-        setArray(newElements);                                        // 基于复制品修改,然后将修改后的复制品放回去
+        setArray(newElements);                                        // 基于快照的复制品修改,然后将修改后的复制品放回去,这样在执行本方法期间,不会影响其他读操作💯💯💯
         return true;
     } finally {
         lock.unlock();

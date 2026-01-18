@@ -7,3 +7,7 @@ public class CopyOnWriteArraySet<E> extends AbstractSet<E> implements java.io.Se
     private final CopyOnWriteArrayList<E> al;
 }
 ```
+
+```text
+CopyOnWriteArrayList.addIfAbsent方法刚好满足Set的核心操作要求
+```
