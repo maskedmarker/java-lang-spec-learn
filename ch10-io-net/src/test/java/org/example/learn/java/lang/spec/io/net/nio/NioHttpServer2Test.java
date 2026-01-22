@@ -17,48 +17,44 @@ public class NioHttpServer2Test {
 
     @Test
     public void test0() throws Exception {
-        start();
-        System.in.read();
-    }
-
-    public void start() {
-        new Thread(() -> {
+        Thread ioThread;
+        ioThread = new Thread(() -> {
             try {
                 this.handleHttp();
             } catch (Exception e) {
                 System.out.println("NioHttpServer发生异常");
                 e.printStackTrace();
             }
-        }).start();
+        });
+        ioThread.start();
+
+        ioThread.join();
     }
 
 
     private void handleHttp() throws Exception {
-        ServerSocketChannel serverChannel = ServerSocketChannel.open();
+        ServerSocketChannel serverChannel = ServerSocketChannel.open();    // The new channel's socket is initially unbound
         serverChannel.configureBlocking(false);
-        // 先向selector注册
-        Selector selector = Selector.open();
+        // 先向selector注册,再bind,不会遗漏,但会积压半连接队列
+        Selector selector = Selector.open();                               // The new selector is created
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-
-        // 再bind
         serverChannel.bind(new InetSocketAddress(PORT));
-
 
         System.out.println("HTTP Server started at http://localhost:" + PORT);
 
-        while (true) {
+        while (!Thread.currentThread().isInterrupted()) {
             selector.select(); // 阻塞直到有事件发生
-            Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
 
-            while (keys.hasNext()) {
-                SelectionKey key = keys.next();
-                keys.remove();
+            Iterator<SelectionKey> keyItr = selector.selectedKeys().iterator();
+            while (keyItr.hasNext()) {
+                SelectionKey key = keyItr.next();
+                keyItr.remove();
 
                 if (key.isAcceptable()) {
-                    // netty将serverSocketChannel accept到的socketChannel称呼为childChannel
+                    // netty将accept到的socketChannel称呼为childChannel
                     SocketChannel childChannel = serverChannel.accept();
                     childChannel.configureBlocking(false);
-                    childChannel.register(selector, SelectionKey.OP_READ);
+                    childChannel.register(selector, SelectionKey.OP_READ);   // read事件不仅包含新数据包到达,还包含连接断开
                 } else if (key.isReadable()) {
                     try {
                         handleRequest(key);
