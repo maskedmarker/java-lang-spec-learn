@@ -55,4 +55,35 @@ public class SendFileTest {
             System.out.println("sendfile completed, bytes = " + size);
         }
     }
+
+    @Test
+    public void test02() throws IOException {
+        String cwd = System.getProperty("user.dir");
+        Path filePath = Paths.get(cwd, "src/test/resources/sendfile.file");
+
+        // 1. 打开文件 2. 建立 TCP 连接
+        try (FileChannel fileChannel = FileChannel.open(filePath, StandardOpenOption.READ);
+             SocketChannel socketChannel = SocketChannel.open(new InetSocketAddress("127.0.0.1", 9000))) {
+
+            socketChannel.configureBlocking(true);
+
+            long position = 0;
+            long size = fileChannel.size();
+
+            // 为什么要 while 循环? sendfile允许部分发送,Kafka/Netty都是这样写的💯💯💯
+            while (position < size) {
+                long transferred = fileChannel.transferTo(position, size - position, socketChannel); // 3. 核心调用：这里在Linux上会进入sendfile()
+                System.out.println("transferred = " + transferred);
+
+                // socket buffer满/网络背压,阻塞模式下通常不会发生 💯💯💯
+                if (transferred == 0) {
+                    continue;
+                }
+
+                position += transferred;
+            }
+
+            System.out.println("sendfile completed, bytes = " + size);
+        }
+    }
 }
