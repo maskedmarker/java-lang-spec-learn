@@ -141,7 +141,8 @@ public class NioEchoTcpServer {
         // 收集接收到的数据
         if (buffers.size() > 0) {
             ByteBuffer data = merge(buffers); // 因为之前已经flip了,此时buffers都处于读模式
-            ((List<ByteBuffer>) key.attachment()).add(data);
+            @SuppressWarnings("unchecked") List<ByteBuffer> attachment = (List<ByteBuffer>) key.attachment();
+            attachment.add(data);
 
             // 输出接收到的字节
             System.out.println("接收到请求:");
