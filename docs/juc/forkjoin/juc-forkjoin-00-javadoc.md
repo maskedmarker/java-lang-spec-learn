@@ -1,7 +1,7 @@
 # juc-forkjoin-javadoc
 
 
-## Implementation Overviewc
+## Implementation Overview
 
 ```text
 Implementation Overview
