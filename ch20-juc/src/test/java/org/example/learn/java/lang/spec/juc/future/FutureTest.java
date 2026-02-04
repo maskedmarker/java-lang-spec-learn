@@ -125,7 +125,7 @@ public class FutureTest {
                     // cancel()的返回值仅仅是本次尝试取消任务是否完成,并非指的是异步计算任务本身是否已经取消(比如存在异步计算任务已经被其他线程取消,那么本次取消尝试肯定是失败的).
                     boolean cancelled = future.cancel(true);
 
-                    // cancel()的返回值与isCancelled()并总是相同的,当前简单的单线程模拟环境肯定是相同的
+                    // cancel()的返回值与isCancelled()并不总是相同的,当前简单的单线程模拟环境肯定是相同的
                     assert cancelled == future.isCancelled();
                     System.out.println("异步任务已取消: " + future.isCancelled());
                     break;
@@ -148,6 +148,9 @@ public class FutureTest {
 
     /**
      * 获取异步计算的任务的结果,可能会抛出异常
+     * Future.get()的阻塞等待过程可以通过中断结束.抛出异常可以让调用方知晓是因为中断跳出等待而非任务结束导致的跳出等待
+     *
+     * 在不增加额外属性标识的情况下,如何区分是因为阻塞等待正常结束还未被中断结束? java选择通过中断异常来区分.
      */
     @Test
     public void test21(){
@@ -164,7 +167,7 @@ public class FutureTest {
             System.out.println("模拟主线程被其他线程interrupt");
             Thread.currentThread().interrupt();
 
-            System.out.println("当前线程被interrupted的状态下,获取结果被阻塞时,会立即抛出中断异常,跳出阻塞状态");
+            System.out.println("在任务还未完成的情况下,get()方法的调用方会等待异步任务完成.如果此时调用方处于interrupted状态,调用get()会立即抛出中断异常跳出阻塞过程");
             Integer result = future.get();
             System.out.println("异步计算结果: " + result);
         } catch (Exception e) {
@@ -176,6 +179,8 @@ public class FutureTest {
 
     /**
      * 获取异步计算的任务的结果,可能会抛出异常
+     *
+     * 在不增加额外属性标识的情况下,如何区分是因为阻塞等待正常结束还未被中断结束? java选择通过中断异常来区分.
      */
     @Test
     public void test22(){
@@ -201,7 +206,7 @@ public class FutureTest {
             System.out.println("模拟主线程被其他线程interrupt");
             Thread.currentThread().interrupt();
 
-            System.out.println("当前线程被interrupted的状态下,如果异步任务已经完成,获取结果不会被阻塞且不会抛出中断异常");
+            System.out.println("异步任务已经完成的情况下,且get()方法的调用方处于interrupted状态,因为调用get()方法不会发生阻塞等待,所以可以保留中断状态位");
             Integer result = future.get();
             System.out.println("异步计算结果: " + result);
         } catch (Exception e) {
