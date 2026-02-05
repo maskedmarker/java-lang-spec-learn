@@ -21,12 +21,12 @@ public class DivideHalfTest {
     }
     /**
      * 奇数个,无法正好平分
-     *      左侧比右侧多一个
+     *      因为是闭区间,所以左侧比右侧多一个
      */
     @Test
     public void test02() {
         int low = 3, hi = 7;
-        int middle = (low + hi) >>> 1;  // [3, 5]  [6, 7]  左侧比右侧多一个
+        int middle = (low + hi) >>> 1;  // [3, 5]  [6, 7]  因为是闭区间,所以左侧比右侧多一个
         System.out.println("middle = " + middle);
     }
 
