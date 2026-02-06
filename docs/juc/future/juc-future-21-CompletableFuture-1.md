@@ -580,7 +580,122 @@ final <S> boolean uniCompose(CompletableFuture<S> a, Function<? super S, ? exten
 ```
 
 
+```text
+构建一个二叉树,根节点是用户声明的计算阶段.叶子节点是cfs数组的元素.中间节点是relay性质的计算阶段.
+在整体树形构建好之前,子树一旦构建好就去尝试执行触发中间节点的完成(理想状态下,这里可以避免构造不必要的部分子树).
 
+
+static CompletableFuture<Object> orTree(CompletableFuture<?>[] cfs, int lo, int hi) {
+    
+    // d是区间元素构建的树的根节点(区间内任何一个cfs元素的完成都会触发根节点的完成)
+    CompletableFuture<Object> d = new CompletableFuture<Object>();
+    
+    if (lo <= hi) {
+        CompletableFuture<?> a, b;   // a/b分别代表根节点d的左右子树(即左右子树的根节点)
+        
+        int mid = (lo + hi) >>> 1;
+        // 递归的终结区间是: 区间内只有1个或2个元素,否则一直下钻递归
+        if ( (a = (lo == mid ? cfs[lo] : orTree(cfs, lo, mid))) == null ||                              
+             (b = (lo == hi ? a : (hi == mid+1) ? cfs[hi] : orTree(cfs, mid+1, hi)))  == null )
+            throw new NullPointerException();                                                                   // a==null和b==null是防御代码
+        
+        
+        // 在整体树形构建好之前,子树一旦构建好就去尝试执行relay性质的中间节点
+        // 初始,a/b子树指向cfs元素; 然后,a/b子树一个是中间节点,一个是cfs元素;最后,a/b子树都是中间节点
+        if (!d.orRelay(a, b)) {                                                                                //  左右子树任何一个完成都会触发中间节点的完成            
+            OrRelay<?,?> c = new OrRelay<>(d, a, b);
+            a.orpush(b, c);
+            c.tryFire(SYNC);
+        }
+    }
+    
+    return d;  // 返回用户声明的计算阶段
+}
+
+
+if (lo <= hi)
+正常递归终止条件: 若区间非法,直接返回一个永远不完成的future(极少见)
+
+
+
+
+(a = (lo == mid ? cfs[lo] : orTree(cfs, lo, mid)))  
+lo == mid,意味着区间[lo, hi]有1个或2个元素,lo==hi/或者lo==hi-1 (此时触发递归的结束)
+
+(b = (lo == hi ? a : (hi == mid+1) ? cfs[hi] : orTree(cfs, mid+1, hi))) 中lo == hi ?用来进一步确认区间中有一个还是两个元素
+lo == hi,意味着区间[lo, hi]只有一个元素,lo==hi
+hi == mid+1,意味着区间[lo, hi]只有2个元素,lo+1==hi
+
+
+整体执行模型💯💯💯
+假设4个future: f0  f1  f2  f3
+构建出的 OR 树：
+     d
+    / \
+  o01  o23
+  / \  / \
+f0 f1 f2 f3
+任何叶子完成 → 向上relay → d完成
+
+
+
+final void orpush(CompletableFuture<?> b, BiCompletion<?,?,?> c) {
+    if (c != null) {
+        
+        // while循环是为了实现tryPushStack失败时发起重试操作.
+        // 先将c作为当前计算阶段的completion-action,再将c作为计算阶段b的completion-action(c被包装成CoCompletion)
+        while ((b == null || b.result == null) && result == null) {                                           // (b == null)为防御性代码,主要是为了使用(b.result == null)
+            if (tryPushStack(c)) {
+                if (b != null && b != this && b.result == null) {
+                    Completion q = new CoCompletion(c);
+                    while (result == null && b.result == null && !b.tryPushStack(q))
+                        lazySetNext(q, null); // clear on failure
+                }
+                break;
+            }
+            lazySetNext(c, null); // clear on failure
+        }
+    }
+}
+
+
+
+final boolean orRelay(CompletableFuture<?> a, CompletableFuture<?> b) {
+    Object r;
+    if (a == null || b == null ||                                   // 防御性代码: a == null || b == null
+        ((r = a.result) == null && (r = b.result) == null))
+        return false;
+    if (result == null)
+        completeRelay(r);
+    return true;
+}
+```
+
+
+```text
+static CompletableFuture<Void> andTree(CompletableFuture<?>[] cfs, int lo, int hi) {
+    CompletableFuture<Void> d = new CompletableFuture<Void>();
+    
+    // 不同于orTree,andTree对于空区间,返回一个完成的节点. 这是为了满足逻辑恒等式 AND(∅) = true
+    if (lo > hi) // empty 
+        d.result = NIL;
+    else {
+        CompletableFuture<?> a, b;
+        int mid = (lo + hi) >>> 1;
+        if ( (a = (lo == mid ? cfs[lo] : andTree(cfs, lo, mid))) == null ||
+             (b = (lo == hi ? a : (hi == mid+1) ? cfs[hi] : andTree(cfs, mid+1, hi)))  == null )
+            throw new NullPointerException();
+        
+        if (!d.biRelay(a, b)) {                                  // 左右子树都完成才会触发中间节点的完成
+            BiRelay<?,?> c = new BiRelay<>(d, a, b);
+            a.bipush(b, c);
+            c.tryFire(SYNC);
+        }
+    }
+    
+    return d;
+}
+```
 
 
 
