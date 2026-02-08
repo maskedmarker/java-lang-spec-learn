@@ -1,4 +1,4 @@
-package org.example.learn.java.lang.spec.io.net.tcp;
+package org.example.learn.java.lang.spec.io.net.socket;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.util.ArrayList;
 import java.util.List;
