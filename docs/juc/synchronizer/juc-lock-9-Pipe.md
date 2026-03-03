@@ -15,4 +15,7 @@ Many pipe implementations will buffer up to a certain number of bytes between th
 ```text
 Pipe的A writable sink channel and a readable source channel是通过在loop-back网卡上创建2个tcp端口实现的.
 一个端口作为client端,一个端口作为server端.
+
+注意这是windows平台的实现. linux平台的Pipe实现是基于内核pipe(2).
+原因在于Windows没有Unix风格的匿名pipe可直接用于select,Windows的select()只对socket有效,而Linux的pipe支持select().
 ```
