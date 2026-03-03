@@ -10,6 +10,10 @@ import java.nio.channels.Pipe;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 不同于Exchanger可以支持多个reader/writer公用同一个exchanger对象(Exchanger保证多reader/writer并发安全),
+ * Pipe应该只有一对reader/writer使用同一个pipe对象(Pipe不保证多reader/writer并发安全)
+ */
 public class PipeTest {
 
     private static class ReadWorker implements Runnable {
