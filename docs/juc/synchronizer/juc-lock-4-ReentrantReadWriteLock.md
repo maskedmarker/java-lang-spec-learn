@@ -118,7 +118,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         setState(getState()); // ensures visibility of readHolds  读取state并原封不动地写入,主要是为了利用state的volatile属性,将readHolds的写入操作让其他线程可见
     }
     
-    // --------------------------------------------- 如下是写锁操作 ------------------------------------------------------------------------
+    // --------------------------------------------- 如下是写锁操作(AQS独占模式) ------------------------------------------------------------------------
     
     protected final boolean tryAcquire(int acquires) {
         /*
@@ -166,7 +166,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         return free;
     }
        
-    // --------------------------------------------- 如下是读锁操作 ------------------------------------------------------------------------
+    // --------------------------------------------- 如下是读锁操作(AQS共享模式) ------------------------------------------------------------------------
     
     protected final int tryAcquireShared(int unused) {
         /*

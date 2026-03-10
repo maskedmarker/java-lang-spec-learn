@@ -35,6 +35,14 @@ public class CyclicBarrier {
 
     // 还未到达的线程数量(初始值等于parties,每个线程到达就会count减一;当进入新的generation时,count的值会恢复到初始值parties;)
     private int count;
+    
+    
+    public CyclicBarrier(int parties, Runnable barrierAction) {
+        if (parties <= 0) throw new IllegalArgumentException();
+        this.parties = parties;
+        this.count = parties;
+        this.barrierCommand = barrierAction;
+    }
 }
 ```
 
@@ -98,7 +106,7 @@ private int dowait(boolean timed, long nanos) throws InterruptedException, Broke
             if (g.broken)
                 throw new BrokenBarrierException();
 
-            if (g != generation)
+            if (g != generation)                               // 本轮结束了,当前线程被最后一个线程唤醒了
                 return index;
 
             if (timed && nanos <= 0L) {

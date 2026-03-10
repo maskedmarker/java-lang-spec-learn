@@ -55,6 +55,12 @@ CountDownLatch.await在latch未达到0时阻塞调用方,所以必须使用acqui
 而CountDownLatch.countDown不能阻塞调用方,所以必须使用release类的方法;
 而CountDownLatch支持多个线程同时调用,所以使用share-mode
 
+(补充
+release的语义来自于tryRelease/tryReleaseShared.
+独占模式的tryRelease表示,释放当前占用的锁对象,之前因为锁被占用而致调用acquire被挂起的线程现在恢复调度,使他们重新去抢占.(tryRelease返回true表示现在锁in a fully released state满足a waiting acquire to succeed)
+共享模式的tryReleaseShared表示,释放当前占用的锁对象部分资源,之前因为锁部分资源不足而致调用acquireShared被挂起的线程现在恢复调度,使他们重新去抢占.(tryReleaseShared返回true表示现在释放出来的部分资源可能满足a waiting acquire to succeed)
+)
+
 ```text
 public class CountDownLatch {
     private final Sync sync;
@@ -86,6 +92,7 @@ private static final class Sync extends AbstractQueuedSynchronizer {
         return getState();
     }
     
+    // 💯💯💯当state为0时acquire才能放行
     protected int tryAcquireShared(int acquires) {
         // 该方法不用来抢锁资源,仅仅用来判断状态是否达到0.入参acquires无意义忽略.
         
@@ -93,6 +100,7 @@ private static final class Sync extends AbstractQueuedSynchronizer {
         return (getState() == 0) ? 1 : -1;
     }
 
+    // 💯💯💯当state从N变为0时,放行被阻塞的acquire线程
     protected boolean tryReleaseShared(int releases) {
         // 存在并发countDown,所以cas需要重试
         for (;;) {
