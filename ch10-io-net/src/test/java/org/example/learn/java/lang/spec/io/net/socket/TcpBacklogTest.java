@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 当server端不去取走(accept) backlog队列中已经建立的连接时,新的连接就无法建立(client端的SYN请求会被server端以RST+ACK拒绝)
- *  socket接口中的backlog参数指的是允许server端可以积压一定量未处理的连接.(至于处理半连接的队列,由操作系统来处理,Java层面无法操控)
+ * 当server端不去取走(accept) backlog队列中已经建立的全连接时,新的连接就无法建立(client端的SYN请求会被server端以RST+ACK拒绝)
+ *  socket接口中的backlog参数指的是允许server端可以积压一定量未处理的全连接.(准确讲backlog参数控制全连接队列的大小.至于半连接的队列的大小,由操作系统的其他参数控制)
  *
  *
  *  在server启动阶段,
