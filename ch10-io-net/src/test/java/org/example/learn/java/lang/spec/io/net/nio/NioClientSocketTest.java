@@ -56,6 +56,8 @@ public class NioClientSocketTest {
                 for (SelectionKey key : keys) {
                     SocketChannel sc = (SocketChannel) key.channel();
                     if (key.isConnectable()) {
+                        System.out.println("可以建立新连接");
+
                         // 💯💯💯虽然被select检测OP_CONNECT,但在read/write前还是要call finishConnect(),否则有抛出NotYetConnectedException异常的可能
                         if (sc.finishConnect()) {
                             System.out.println("连接完成");
@@ -63,9 +65,16 @@ public class NioClientSocketTest {
                         } else {
                             throw new Error("selector发现socketChannel已经OP_CONNECT ready,但是finishConnect()却返回false,意味着连接还未建立");
                         }
+
+                        // jdk使用的是水平触发(Level-Triggered)机制,如果不移除OP_CONNECT,后续每次select还会返回当前连接
+                        int ops = key.interestOps();
+                        ops &= ~SelectionKey.OP_CONNECT;
+                        key.interestOps(ops);
                     } else if (key.isWritable()) {
+                        System.out.println("可以写入数据");
                         sc.write(ByteBuffer.wrap(DATA));
                     } else if (key.isReadable()) {
+                        System.out.println("可以读取数据");
                         read(sc);
                     }
                 }

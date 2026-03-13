@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 当你调用 SocketChannel.close() 时，是否还需要从 Selector 中手动移除对应的 SelectionKey？
+ * 当你调用 SocketChannel.close() 时，是否还需要从 Selector 中手动移除对应的 SelectionKey?
  * 不需要手动 remove，close() 会自动取消注册。
  *
  * 调用SocketChannel.close方法会将其SelectionKey设置为cancelled,即该SelectionKey会被放到Selector的cancelled-key,在下次select的时候被自动清除
@@ -91,9 +91,14 @@ public class NioEchoTcpServer {
             while (keys.hasNext()) {
                 SelectionKey key = keys.next();
                 // jdk使用的是水平触发(Level-Triggered)机制, 所以处理完key的事件后,必须要将其从事件集selectedKeys中移除,不然就出现无意义的循环了.
-                keys.remove();
+//                keys.remove();
 
                 if (key.isAcceptable()) {
+                    // jdk使用的是水平触发(Level-Triggered)机制,如果不移除OP_CONNECT,后续每次select还会返回当前连接
+                    int ops = key.interestOps();
+                    ops &= ~SelectionKey.OP_ACCEPT;
+                    key.interestOps(ops);
+
                     // netty将serverSocketChannel accept到的socketChannel称呼为childChannel
                     SocketChannel childChannel = serverChannel.accept();
                     childChannel.configureBlocking(false);
@@ -101,7 +106,7 @@ public class NioEchoTcpServer {
                     selectionKey.attach(new ArrayList<>()); // 收集接收到的数据
 
                     System.out.printf("建立新连接: %s -> %s\n", childChannel.getRemoteAddress(), this.serverChannel.getLocalAddress());
-                } else if (key.isReadable()) { // socket的input-buffer有数据了,或者对方发起了关闭tcp连接(即对方发送了FIN,本方OS回应ACK)
+                } else if (key.isReadable()) { // socket的input-buffer有数据了,或者对方发起了关闭tcp连接(即对方发送了FIN,本方OS回应ACK),都算OP_READ ready
                     try {
                         handleRequest(key);
                     } catch (IOException e) {

@@ -9,7 +9,7 @@ import java.nio.channels.Pipe;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
-public class NioSelectorTest {
+public class SelectorTest {
 
     /**
      *  On all platforms, Selector must support:

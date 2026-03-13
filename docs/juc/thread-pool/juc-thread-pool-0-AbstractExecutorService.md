@@ -1,6 +1,35 @@
 # juc-AbstractExecutorService
 
-AbstractExecutorService将线程池都需要实现的一些基本功能方法给抽象出来了
+
+## ExecutorService
+
+```text
+Executor过于抽象,仅仅定义了一个方法execute(runnable).
+如果用户想要知道任务的执行结果,还要用户实现查看任务执行结果的功能.这类需求是大量存在的.
+同时Executor也没有定义统一的管理线程池的接口(Executor内部需要线程池支撑).
+于是就有了ExecutorService.
+
+submit         -> 支持提交不同类型的任务
+invokeAll      -> 提交任务并等待任务完成
+shutdown       -> 发起关闭线程池的流程
+shutdownNow    -> 立即关闭线程池
+```
+
+## AbstractExecutorService
+
+AbstractExecutorService将ExecutorService需要实现的共性的基础功能都实现了,最核心的execute方法留给子类来实现.
+
+```text
+实现的共性的基础功能:
+
+// 薄薄的封装层
+submit(需要newTaskFor和execute支持)    // 支持用户提交callable/runnable
+newTaskFor(callable/runnable)        // 将用户提交的任务统一封装成RunnableFuture
+
+// 公用实现
+invokeAny
+invokeAll
+```
 
 ```text
 public abstract class AbstractExecutorService implements ExecutorService {
@@ -9,50 +38,27 @@ public abstract class AbstractExecutorService implements ExecutorService {
     abstract void execute(Runnable command); // command指的是待执行的任务
 }
 ```
-execute方法的javadoc中"at some time in the future",并结合"or in the calling thread",execute方法的语义并不一定是异步执行command的
+execute方法的javadoc中"at some time in the future",并结合"or in the calling thread",execute方法的语义并不一定是异步执行command的,只是说如果提交的command没有被拒绝则command会被执行.
 
+
+## doInvokeAny
+
+Executes the given tasks, returning the result of one that has completed successfully.
+那些没来得及完成的会被cancel.
 
 ```text
-doInvokeAny
+// 注意这个方法是被线程池外的外部线程调用.
 
-doInvokeAny 方法可以同时提交多个任务（例如一组 Callable），并返回第一个成功完成的结果。
-但在某些执行器（比如固定线程池 newFixedThreadPool(2)）中，线程数是有限的，不可能同时运行所有任务。
-如果一次性提交大量任务，会造成：
-    队列中堆积任务；
-    增加上下文切换和内存占用；
-    延迟结果返回时间。
-因此，为了效率（efficiency），需要在提交新任务之前，先检查之前提交的任务是否已经完成(这句是重点)。
-
-“check to see if previously submitted tasks are done before submitting more of them.”
-解释：
-    这句话描述的是 doInvokeAny 的核心调度策略。
-    它不会一次性把所有 Callable 都提交给线程池；
-    而是采用一种 交错（interleaving） 的策略：
-        提交一部分；
-        看看有没有已经完成的；
-        如果没有，再继续提交下一部分。
-这种方式让方法能更快地拿到第一个成功结果，同时减少无谓的任务提交。
-
-“This interleaving plus the exception mechanics account for messiness of main loop.”
-解释：
-doInvokeAny 的内部实现包含：
-    任务批量提交；
-    每次循环检查任务是否完成；
-    如果有异常（例如任务执行失败），要捕获并决定是否重试；
-    如果有任务成功完成，马上取消剩余的任务。
-这导致它的主循环看起来比较复杂，不像普通的 for 循环那么整洁。
-但这种“混乱”是为了性能与正确性做出的设计折中。
-
-
-注意这个方法是被线程池外的外部线程调用.
 private <T> T doInvokeAny(Collection<? extends Callable<T>> tasks, boolean timed, long nanos) throws InterruptedException, ExecutionException, TimeoutException {
     if (tasks == null)
         throw new NullPointerException();
     int ntasks = tasks.size(); // 记录待提交的任务数
     if (ntasks == 0)
         throw new IllegalArgumentException();
+    
     ArrayList<Future<T>> futures = new ArrayList<Future<T>>(ntasks);
-    // 当前线程是外部线程,任务应该由线程池完成,所以这里用了this
+    
+    // 为了便于观察已提交的任务是否完成,使用了ExecutorCompletionService(ExecutorCompletionService内部需要Executor支持,所以就借用了当前线程池)
     ExecutorCompletionService<T> ecs = new ExecutorCompletionService<T>(this);
 
     // For efficiency, especially in executors with limited parallelism, check to see if previously submitted tasks are done before submitting more of them. 
@@ -108,11 +114,23 @@ private <T> T doInvokeAny(Collection<? extends Callable<T>> tasks, boolean timed
 
     } finally {
         for (int i = 0, size = futures.size(); i < size; i++)
-            futures.get(i).cancel(true);
+            futures.get(i).cancel(true);    // cancel那些没来得及完成的
     }
 }
 ```
 
+```text
+doInvokeAny方法支持同时提交多个任务,只要返回一个任务成功完成的结果.
+从逻辑上来讲,只要有一个完成的任务就不用向线程池再提交更多的任务.所以先提交一个任务,然后查看一下任务是否已完成,如果完成就提前结束方法,如果没有任务完成就接着继续提交(防止任务执行时间长短不一),如此循环直到有任务完成了就停止提交,或者都提交完成了就等最先完成的任务.
+这样渐进式地提交任务,不过多浪费系统资源,降低上下文切换.
+```
+
+
+## invokeAll
+
+Executes the given tasks, returning a list of Futures holding their status and results when all complete. 
+Future.isDone is true for each element of the returned list.
+当提交的所有任务都已经完成(正常完成/发生异常/被取消)时,才会从invokeAll方法返回.(可能发生无穷等待,如果想要等待有限时间,就需要使用带timeout的invokeAll版本)
 
 ```text
 public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) throws InterruptedException {
@@ -147,6 +165,10 @@ public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) th
     }
 }
 ```
+
+## invokeAll(timeout)
+
+Executes the given tasks, returning a list of Futures holding their status and results when all complete or the timeout expires, whichever happens first.
 
 ```text
 timeout指的是从任务提交开始计时,等待任务完成的最大时间
