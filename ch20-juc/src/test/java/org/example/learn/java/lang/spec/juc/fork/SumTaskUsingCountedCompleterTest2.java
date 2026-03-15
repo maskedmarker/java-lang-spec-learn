@@ -6,6 +6,7 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.concurrent.CountedCompleter;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
@@ -52,7 +53,7 @@ public class SumTaskUsingCountedCompleterTest2 {
 
 
     @Test
-    public void test0() {
+    public void test01() {
         int[] arr = new int[1_000_000];
         Arrays.fill(arr, 1);
         int expectedSum = IntStream.of(arr).sum();
@@ -61,7 +62,23 @@ public class SumTaskUsingCountedCompleterTest2 {
         AtomicLong totalSum = new AtomicLong(0);
         ForkJoinPool pool = ForkJoinPool.commonPool();
 
-        pool.invoke(new SumTask(null, arr, 0, arr.length, totalSum));
+        pool.invoke(new SumTask(null, arr, 0, arr.length, totalSum));    // invoke不仅提交任务,而且等到提交的任务执行完才能从invoke方法返回
+        System.out.println("result = " + totalSum);
+        Assert.assertEquals(expectedSum, totalSum.longValue());
+    }
+
+    @Test
+    public void test02() {
+        int[] arr = new int[1_000_000];
+        Arrays.fill(arr, 1);
+        int expectedSum = IntStream.of(arr).sum();
+        System.out.println("expectedSum = " + expectedSum);
+
+        AtomicLong totalSum = new AtomicLong(0);
+        ForkJoinPool pool = ForkJoinPool.commonPool();
+
+        ForkJoinTask<Void> submittedTask = pool.submit(new SumTask(null, arr, 0, arr.length, totalSum));// submit仅提交任务,返回值为入参任务(此处可以当作future使用)
+        submittedTask.join();    // 等待任务完成
         System.out.println("result = " + totalSum);
         Assert.assertEquals(expectedSum, totalSum.longValue());
     }
@@ -71,7 +88,7 @@ public class SumTaskUsingCountedCompleterTest2 {
      * 多次重复执行,降低误判的概率
      */
     @Test
-    public void test01() {
+    public void test03() {
         int[] arr = new int[10000];
         Arrays.fill(arr, 1);
         int expectedSum = IntStream.of(arr).sum();
