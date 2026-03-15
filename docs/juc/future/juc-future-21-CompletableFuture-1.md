@@ -23,7 +23,7 @@ CompletionStage: A stage of a possibly asynchronous computation, that performs a
 
 CompletableFuture.supplyAsync(action1)声明了一个计算阶段及其计算逻辑(action1),其返回值即其声明的计算阶段(cf).
 由于计算阶段的计算逻辑是异步的,所以要将计算阶段的计算逻辑由线程池来异步完成.
-同时计算阶段的计算逻辑会触发其计算阶段完成,所以异步任务(对应AsyncSupply类)中要持有计算阶段及其计算逻辑.当异步任务执行时,异步任务执行计算阶段的计算逻辑后,还要标识计算阶段的完成(即设置result),并触发后续的级联完成(调用postComplete).
+同时计算阶段的计算逻辑完成后会触发其计算阶段的完成,所以异步任务(对应AsyncSupply类)中要持有计算阶段及其计算逻辑.当异步任务执行时,异步任务执行计算阶段的计算逻辑后,还要标识计算阶段的完成(即设置result),并触发后续的级联完成(调用postComplete).
 
 cf.thenAccept(action2)也是声明了一个计算阶段及其计算逻辑(action2),其返回值即其声明的计算阶段(cf2).
 由于thenAccept方法支持同步运行cf2的计算逻辑(action2),
