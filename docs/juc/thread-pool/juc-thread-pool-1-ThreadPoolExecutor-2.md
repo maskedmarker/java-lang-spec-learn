@@ -601,3 +601,10 @@ public class TaskQueue extends LinkedBlockingQueue<Runnable> {
 
 ```
 
+## 动态调整线程池大小
+
+ThreadPoolExecutor支持动态调整线程池的核心参数
+```text
+public void setMaximumPoolSize(int maximumPoolSize) { //...}
+public void setCorePoolSize(int corePoolSize) { //...}
+```
