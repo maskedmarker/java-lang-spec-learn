@@ -4,54 +4,16 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
 
-<pre>
-java.lang.ThreadLocal#get()
-    public T get() {
-        Thread t = Thread.currentThread();
-        ThreadLocalMap map = getMap(t);
-        if (map != null) {
-            ThreadLocalMap.Entry e = map.getEntry(this);
-            if (e != null) {
-                T result = (T)e.value;
-                return result;
-            }
-        }
-        return setInitialValue();
-    }
+ WeakReference 的 referent 字段是特殊处理的 GC 标记阶段： 不会沿着 weak reference 继续标记
 
- java.lang.ThreadLocal#getMap()
-    ThreadLocalMap getMap(Thread t) {
-        return t.threadLocals;             // Thread对象内部持有ThreadLocalMap对象. 除非线程销毁,否则ThreadLocalMap一直被强引用
-    }
+ thread -> threadLocalMap -> entry ==> threadLocal
+                                |
+                                -> value
 
-class ThreadLocalMap {
+ 在jdk中,value是被强引用, threadLocal是被弱引用.
+ 当用户代码不再强引用threadLocal时,threadLocal会被gc回收,此时value值会被jdk当作无用数据,会被新的(threadLocal, value)占用原有的entry,覆盖旧的value值.
 
-    static class Entry extends WeakReference<ThreadLocal<?>> {
-        // The value associated with this ThreadLocal.
-        Object value;
-
-        Entry(ThreadLocal<?> k, Object v) {
-            // ThreadLocalMap.Entry对象对ThreadLocal对象是弱引用; ThreadLocalMap.Entry对象对value是强引用
-            super(k);
-            value = v;
-        }
-    }
-
-    private Entry[] table;
-
-    private void set(ThreadLocal<?> key, Object value) {
-        Entry[] tab = table;
-        int len = tab.length;
-        int i = key.threadLocalHashCode & (len-1);
-        // ...
-        tab[i] = new Entry(key, value);
-        // ...
-    }
-}
-
-</pre>
-
-
+ 线程池中的线程通常与应用的生命周期一样长,如果用户不主动释放value值,value值会被thread一直强引用,导致内存泄露.(threadLocal会被gc回收,不会内存泄露)
  */
 public class ThreadLocalTest {
 
