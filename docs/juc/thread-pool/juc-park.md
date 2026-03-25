@@ -4,6 +4,11 @@ juc中提供的新的挂起线程的工具类:
 java.util.concurrent.locks.LockSupport
 
 
+不管是VirtualThread还是Thread类,在使用park时,
+都是当前"(虚拟)线程"基于对某种条件的判断,需要先暂时挂起,自己主动调用LockSupport.park(),而非其他线程调用另一个线程;等待条件满足后,会被其他线程LockSupport.unpark().🎯🎯🎯🎯🎯🎯
+
+注意: LockSupport.park()的语义是哪个线程调用当前方法,哪个线程就被挂起.所以不存在其他线程通过调用park让另一个线程挂起.
+
 ## park
 ```text
 java.util.concurrent.locks.LockSupport.park(java.lang.Object)
