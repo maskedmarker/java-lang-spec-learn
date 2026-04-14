@@ -161,3 +161,22 @@ final void postComplete() {
   NESTED(-1)：嵌套传播中触发,根据情况选择执行方式
 在 tryFire(NESTED) 中通常会尝试直接执行(类似 SYNC),避免额外排队.    
 ```
+
+```text
+abstract CompletableFuture<?> tryFire(int mode);
+
+cf-A
+    completion-A1
+        cf-B
+
+cf-A.postComplete开始依次触发自己的completion
+理解completion.tryFire的返回值是关键:
+当返回null时, 表示当前completion-A1没有被其他CompletableFuture依赖,即不需要讲completion事件告诉其他CompletableFuture依赖者.
+当返回非null时, 表示当前这个completion-A1有被其他cf-B依赖,即需要讲completion事件告诉cf-B依赖者.
+            当前这个completion-A1先通过completeValue设置cf-B依赖者
+            当前这个completion-A1先通过cf-B依赖者的postFire检查cf-B的completion-stack是否为空,如果不为空就将cf-B返回给cf-A的postComplete(即当前线程接着处理cf-B的completion-stack)
+
+cf-x形成了一个依赖树,使用深度优先的算法来执行根到叶子的completion💯
+
+注意:postFire的入参mode是NESTED,所以cf-B的postFire不会协助完成cf-A的completion-stack
+```
