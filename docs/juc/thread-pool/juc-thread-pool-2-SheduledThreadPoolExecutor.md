@@ -207,7 +207,7 @@ static class DelayedWorkQueue extends AbstractQueue<Runnable> implements Blockin
                 else {
                     long delay = first.getDelay(NANOSECONDS);
                     if (delay <= 0)
-                        return finishPoll(first);
+                        return finishPoll(first);     // 💯💯💯
                     
                     first = null;                // don't retain ref while waiting
                     if (leader != null)
