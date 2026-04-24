@@ -156,6 +156,60 @@ At runtime, both become simply List.
 Type safety is enforced at compile time only.
 ```
 
+```text
+类型擦除的 2 条核心规则
+
+编译器擦除泛型时，严格遵循这两个规则：
+1. 无界泛型（<T>）→ 擦除为 Object
+2. 有界泛型（<T extends 类/接口>）→ 擦除为上界类型
+
+// 源码
+List<String> list = new ArrayList<>();
+// 擦除后
+List list = new ArrayList();
+
+
+// 泛型限定为 Number 的子类
+class NumBox<T extends Number> {
+    private T num;
+}
+// 擦除后
+class NumBox {
+    // 擦为上界 Number，不是 Object
+    private Number num;
+}
+
+
+三、关键特性：运行时无泛型类型信息
+因为类型擦除，Java 运行时无法判断泛型的具体类型。
+
+
+四、编译器偷偷做的事：自动强制类型转换
+既然擦除为 Object，为什么我们取数据不用强转？因为编译器自动帮你加了强转代码。
+List<String> list = new ArrayList<>();
+list.add("hello");
+String s = list.get(0); // 不用强转
+
+实际编译后代码：
+List list = new ArrayList();
+list.add("hello");
+// 编译器自动插入 (String) 强转
+String s = (String) list.get(0);
+
+
+五、类型擦除带来的 3 个常见限制
+1. 不能创建泛型数组
+    // 编译报错
+    List<String>[] arr = new List<String>[5];
+2. 不能使用基本类型作为泛型参数
+    // 错误
+    List<int> list = new ArrayList<>();
+    // 正确（必须用包装类）
+    List<Integer> list = new ArrayList<>();
+3. 不能 catch 泛型异常
+    // 编译报错
+    catch (GenericException<String> e) { }
+```
 
 
 ## Reifiable vs Non-Reifiable Types（可具体化类型与不可具体化类型）
