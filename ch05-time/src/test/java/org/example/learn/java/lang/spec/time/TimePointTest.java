@@ -19,7 +19,7 @@ import java.time.*;
  *
  * 如果需要一个精确到秒的具体时刻，应该用：
  * LocalDateTime（日期+时间，但无时区）
- * Instant（时间戳，面向机器）
+ * Instant（时间戳，面向机器, 带时区概念的：永远代表UTC+0, 没有ZoneId字段,但api约定）
  * ZonedDateTime（日期+时间+时区）
  *
  * 理解了 LocalDate 的定位后，之前的结论就更清晰了：
