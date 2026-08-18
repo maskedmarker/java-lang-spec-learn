@@ -12,6 +12,14 @@ import java.util.ArrayList;
  * 这是一个接口，而不是具体的类。它用于获取当前类（Class 对象所代表的类）的带有泛型参数信息的父类类型。
  * 当父类没有泛型参数时，返回的就是普通的 Class 对象。
  * 当父类带有泛型参数时，返回这个接口的实现，可以从中提取出具体的泛型类型。
+ *
+ * 为什么需要这个方法（典型应用场景）
+ * Java 泛型在编译后会进行“类型擦除”，但父类上的泛型参数可以通过这个方法保留下来，从而在运行时被读取。
+ * 最经典的框架场景：Spring、MyBatis、Gson 等框架中，用于提取泛型类型来反序列化 JSON 或进行类型转换。
+ *
+ * 与 getSuperclass() 的区别
+ * Class.getSuperclass() 丢失泛型参数，只能得到原始类型（如 ArrayList.class）
+ * Class.getGenericSuperclass() 保留泛型参数，可获取 ParameterizedType 进一步提取
  */
 public class GenericSuperclassTest {
 
